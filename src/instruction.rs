@@ -4,22 +4,17 @@ pub use crate::cpu::CPU;
 pub enum Instruction {
 
     //8 bit loads
-    LdB(u8),
-    LdC(u8),
-    LdD(u8),
-    LdE(u8),
-    LdH(u8),
-    LdL(u8),
+    LdN(u8, u8),
 
-    LdAR2(u8),
+    LdAR2(u8, u8),
     LdAnn(u8),
     LdAd8(u8),
-    LdBR2(u8),
-    LdCR2(u8),
-    LdDR2(u8),
-    LdER2(u8),
-    LdHR2(u8),
-    LdLR2(u8),
+    LdBR2(u8, bool),
+    LdCR2(u8, bool),
+    LdDR2(u8, bool),
+    LdER2(u8, bool),
+    LdHR2(u8, bool),
+    LdLR2(u8, bool),
 
     LdnA(u8, u8),
     Ldn16A(u16, u8),
@@ -90,9 +85,14 @@ pub enum Instruction {
     // Miscellaneous
     SwapN(u8, u8),
     SwapHl(u8),
+    Daa,
     Cpl(u8),
     Scf,
     Nop,
+    Halt,
+    Di,
+    Ei,
+
 
 
     //Rotates and Shifts
@@ -105,6 +105,7 @@ pub enum Instruction {
 
     //bit opcodes
     BitbR(u8, u8),
+    BitbHl(u8, u8),
     //do BitbHl too
 
     //jumps

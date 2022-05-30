@@ -1,6 +1,4 @@
-
-pub mod Decoder {
-    pub use crate::cpu::CPU;
+pub use crate::cpu::CPU;
     pub use crate::instruction::Instruction;
     pub use crate::mmu::MMU;
 
@@ -11,12 +9,12 @@ pub mod Decoder {
             // 8 bit loads
             // 1. LD nn,n
             // Description: Put value nn into n.
-            0x06 => Instruction::LdB(n1 as u8),
-            0x0E => Instruction::LdC(n1 as u8),
-            0x16 => Instruction::LdD(n1 as u8),
-            0x1E => Instruction::LdE(n1 as u8),
-            0x26 => Instruction::LdH(n1 as u8),
-            0x2E => Instruction::LdL(n1 as u8),
+            0x06 => Instruction::LdN(0, n1 as u8),
+            0x0E => Instruction::LdN(1, n1 as u8),
+            0x16 => Instruction::LdN(2, n1 as u8),
+            0x1E => Instruction::LdN(3, n1 as u8),
+            0x26 => Instruction::LdN(4, n1 as u8),
+            0x2E => Instruction::LdN(5, n1 as u8),
     
     
             // 2. LD r1,r2
@@ -24,66 +22,66 @@ pub mod Decoder {
     
             // r1 = a is the same as 3. LD A,n
     
-            0x7F => Instruction::LdAR2(cpu.get_a()),
-            0x78 => Instruction::LdAR2(cpu.get_b()),
-            0x79 => Instruction::LdAR2(cpu.get_c()),
-            0x7A => Instruction::LdAR2(cpu.get_d()),
-            0x7B => Instruction::LdAR2(cpu.get_e()),
-            0x7C => Instruction::LdAR2(cpu.get_h()),
-            0x7D => Instruction::LdAR2(cpu.get_l()),
-            0x7E => Instruction::LdAR2(mmu.read_byte(cpu.get_hl())),
-            0x0A => Instruction::LdAR2(mmu.read_byte(cpu.get_bc())),
-            0x1A => Instruction::LdAR2(mmu.read_byte(cpu.get_de())),
+            0x7F => Instruction::LdAR2(0, cpu.get_a()),
+            0x78 => Instruction::LdAR2(0, cpu.get_b()),
+            0x79 => Instruction::LdAR2(0, cpu.get_c()),
+            0x7A => Instruction::LdAR2(0, cpu.get_d()),
+            0x7B => Instruction::LdAR2(0, cpu.get_e()),
+            0x7C => Instruction::LdAR2(0, cpu.get_h()),
+            0x7D => Instruction::LdAR2(0, cpu.get_l()),
+            0x7E => Instruction::LdAR2(1, mmu.read_byte(cpu.get_hl())),
+            0x0A => Instruction::LdAR2(1, mmu.read_byte(cpu.get_bc())),
+            0x1A => Instruction::LdAR2(1, mmu.read_byte(cpu.get_de())),
             0xFA => Instruction::LdAnn(mmu.read_byte(d16)),
             0x3E => Instruction::LdAd8(n1 as u8),
     
-            0x40 => Instruction::LdBR2(cpu.get_b()),
-            0x41 => Instruction::LdBR2(cpu.get_c()),
-            0x42 => Instruction::LdBR2(cpu.get_d()),
-            0x43 => Instruction::LdBR2(cpu.get_e()),
-            0x44 => Instruction::LdBR2(cpu.get_h()),
-            0x45 => Instruction::LdBR2(cpu.get_l()),
-            0x46 => Instruction::LdBR2(mmu.read_byte(cpu.get_hl())),
+            0x40 => Instruction::LdBR2(cpu.get_b(), false),
+            0x41 => Instruction::LdBR2(cpu.get_c(), false),
+            0x42 => Instruction::LdBR2(cpu.get_d(), false),
+            0x43 => Instruction::LdBR2(cpu.get_e(), false),
+            0x44 => Instruction::LdBR2(cpu.get_h(), false),
+            0x45 => Instruction::LdBR2(cpu.get_l(), false),
+            0x46 => Instruction::LdBR2(mmu.read_byte(cpu.get_hl()), true),
     
-            0x48 => Instruction::LdCR2(cpu.get_b()),
-            0x49 => Instruction::LdCR2(cpu.get_c()),
-            0x4A => Instruction::LdCR2(cpu.get_d()),
-            0x4B => Instruction::LdCR2(cpu.get_e()),
-            0x4C => Instruction::LdCR2(cpu.get_h()),
-            0x4D => Instruction::LdCR2(cpu.get_l()),
-            0x4E => Instruction::LdCR2(mmu.read_byte(cpu.get_hl())),
+            0x48 => Instruction::LdCR2(cpu.get_b(), false),
+            0x49 => Instruction::LdCR2(cpu.get_c(), false),
+            0x4A => Instruction::LdCR2(cpu.get_d(), false),
+            0x4B => Instruction::LdCR2(cpu.get_e(), false),
+            0x4C => Instruction::LdCR2(cpu.get_h(), false),
+            0x4D => Instruction::LdCR2(cpu.get_l(), false),
+            0x4E => Instruction::LdCR2(mmu.read_byte(cpu.get_hl()), true),
     
-            0x50 => Instruction::LdDR2(cpu.get_b()),
-            0x51 => Instruction::LdDR2(cpu.get_c()),
-            0x52 => Instruction::LdDR2(cpu.get_d()),
-            0x53 => Instruction::LdDR2(cpu.get_e()),
-            0x54 => Instruction::LdDR2(cpu.get_h()),
-            0x55 => Instruction::LdDR2(cpu.get_l()),
-            0x56 => Instruction::LdDR2(mmu.read_byte(cpu.get_hl())),
+            0x50 => Instruction::LdDR2(cpu.get_b(), false),
+            0x51 => Instruction::LdDR2(cpu.get_c(), false),
+            0x52 => Instruction::LdDR2(cpu.get_d(), false),
+            0x53 => Instruction::LdDR2(cpu.get_e(), false),
+            0x54 => Instruction::LdDR2(cpu.get_h(), false),
+            0x55 => Instruction::LdDR2(cpu.get_l(), false),
+            0x56 => Instruction::LdDR2(mmu.read_byte(cpu.get_hl()), true),
     
-            0x58 => Instruction::LdER2(cpu.get_b()),
-            0x59 => Instruction::LdER2(cpu.get_c()),
-            0x5A => Instruction::LdER2(cpu.get_d()),
-            0x5B => Instruction::LdER2(cpu.get_e()),
-            0x5C => Instruction::LdER2(cpu.get_h()),
-            0x5D => Instruction::LdER2(cpu.get_l()),
-            0x5E => Instruction::LdER2(mmu.read_byte(cpu.get_hl())),
+            0x58 => Instruction::LdER2(cpu.get_b(), false),
+            0x59 => Instruction::LdER2(cpu.get_c(), false),
+            0x5A => Instruction::LdER2(cpu.get_d(), false),
+            0x5B => Instruction::LdER2(cpu.get_e(), false),
+            0x5C => Instruction::LdER2(cpu.get_h(), false),
+            0x5D => Instruction::LdER2(cpu.get_l(), false),
+            0x5E => Instruction::LdER2(mmu.read_byte(cpu.get_hl()), true),
     
-            0x60 => Instruction::LdHR2(cpu.get_b()),
-            0x61 => Instruction::LdHR2(cpu.get_c()),
-            0x62 => Instruction::LdHR2(cpu.get_d()),
-            0x63 => Instruction::LdHR2(cpu.get_e()),
-            0x64 => Instruction::LdHR2(cpu.get_h()),
-            0x65 => Instruction::LdHR2(cpu.get_l()),
-            0x66 => Instruction::LdHR2(mmu.read_byte(cpu.get_hl())),
+            0x60 => Instruction::LdHR2(cpu.get_b(), false),
+            0x61 => Instruction::LdHR2(cpu.get_c(), false),
+            0x62 => Instruction::LdHR2(cpu.get_d(), false),
+            0x63 => Instruction::LdHR2(cpu.get_e(), false),
+            0x64 => Instruction::LdHR2(cpu.get_h(), false),
+            0x65 => Instruction::LdHR2(cpu.get_l(), false),
+            0x66 => Instruction::LdHR2(mmu.read_byte(cpu.get_hl()), true),
     
-            0x68 => Instruction::LdLR2(cpu.get_b()),
-            0x69 => Instruction::LdLR2(cpu.get_c()),
-            0x6A => Instruction::LdLR2(cpu.get_d()),
-            0x6B => Instruction::LdLR2(cpu.get_e()),
-            0x6C => Instruction::LdLR2(cpu.get_h()),
-            0x6D => Instruction::LdLR2(cpu.get_l()),
-            0x6E => Instruction::LdLR2(mmu.read_byte(cpu.get_hl())),
+            0x68 => Instruction::LdLR2(cpu.get_b(), false),
+            0x69 => Instruction::LdLR2(cpu.get_c(), false),
+            0x6A => Instruction::LdLR2(cpu.get_d(), false),
+            0x6B => Instruction::LdLR2(cpu.get_e(), false),
+            0x6C => Instruction::LdLR2(cpu.get_h(), false),
+            0x6D => Instruction::LdLR2(cpu.get_l(), false),
+            0x6E => Instruction::LdLR2(mmu.read_byte(cpu.get_hl()), true),
     
             // 4. LD n,A
             // Description:  Put value A into n.
@@ -309,6 +307,8 @@ pub mod Decoder {
 
             // Miscellaneous
 
+            //
+            0x27 => Instruction::Daa,
             // 3. CPL
             // Description:  Complement A register. (Flip all bits.)
             0x2F => Instruction::Cpl(cpu.get_a()),
@@ -320,6 +320,18 @@ pub mod Decoder {
             // 6. NOP
             // Description:  No operation.
             0x00 => Instruction::Nop,
+
+            0x76 => Instruction::Halt,
+
+            // 9. DI
+            // Description: This instruction disables interrupts but not  immediately. 
+            // Interrupts are disabled after  instruction after DI is executed.
+            0xF3 => Instruction::Di,
+
+            // 10. EI
+            // Description:  Enable interrupts. This intruction enables interrupts but not immediately.
+            // Interrupts are enabled after  instruction after EI is executed.
+            0xFB => Instruction::Ei,
 
 
     
@@ -429,6 +441,7 @@ pub mod Decoder {
             0x43 => Instruction::BitbR(0b00000001, cpu.get_e()),
             0x44 => Instruction::BitbR(0b00000001, cpu.get_h()),
             0x45 => Instruction::BitbR(0b00000001, cpu.get_l()),
+            0x46 => Instruction::BitbHl(0b00000001, mmu.read_byte(cpu.get_hl())),
 
             // bit 1
             0x4F => Instruction::BitbR(0b00000010, cpu.get_a()),
@@ -438,6 +451,7 @@ pub mod Decoder {
             0x4B => Instruction::BitbR(0b00000010, cpu.get_e()),
             0x4C => Instruction::BitbR(0b00000010, cpu.get_h()),
             0x4D => Instruction::BitbR(0b00000010, cpu.get_l()),
+            0x4E => Instruction::BitbHl(0b00000010, mmu.read_byte(cpu.get_hl())),
 
             // bit 2
             0x57 => Instruction::BitbR(0b00000100, cpu.get_a()),
@@ -447,6 +461,7 @@ pub mod Decoder {
             0x53 => Instruction::BitbR(0b00000100, cpu.get_e()),
             0x54 => Instruction::BitbR(0b00000100, cpu.get_h()),
             0x55 => Instruction::BitbR(0b00000100, cpu.get_l()),
+            0x56 => Instruction::BitbHl(0b00000100, mmu.read_byte(cpu.get_hl())),
 
             // bit 3
             0x5F => Instruction::BitbR(0b00001000, cpu.get_a()),
@@ -456,6 +471,7 @@ pub mod Decoder {
             0x5B => Instruction::BitbR(0b00001000, cpu.get_e()),
             0x5C => Instruction::BitbR(0b00001000, cpu.get_h()),
             0x5D => Instruction::BitbR(0b00001000, cpu.get_l()),
+            0x5E => Instruction::BitbHl(0b00001000, mmu.read_byte(cpu.get_hl())),
 
             // bit 4
             0x67 => Instruction::BitbR(0b00010000, cpu.get_a()),
@@ -465,6 +481,7 @@ pub mod Decoder {
             0x63 => Instruction::BitbR(0b00010000, cpu.get_e()),
             0x64 => Instruction::BitbR(0b00010000, cpu.get_h()),
             0x65 => Instruction::BitbR(0b00010000, cpu.get_l()),
+            0x66 => Instruction::BitbHl(0b00010000, mmu.read_byte(cpu.get_hl())),
 
             // bit 5
             0x6F => Instruction::BitbR(0b00100000, cpu.get_a()),
@@ -474,6 +491,7 @@ pub mod Decoder {
             0x6B => Instruction::BitbR(0b00100000, cpu.get_e()),
             0x6C => Instruction::BitbR(0b00100000, cpu.get_h()),
             0x6D => Instruction::BitbR(0b00100000, cpu.get_l()),
+            0x6E => Instruction::BitbHl(0b00100000, mmu.read_byte(cpu.get_hl())),
 
             // bit 6
             0x77 => Instruction::BitbR(0b01000000, cpu.get_a()),
@@ -483,6 +501,7 @@ pub mod Decoder {
             0x73 => Instruction::BitbR(0b01000000, cpu.get_e()),
             0x74 => Instruction::BitbR(0b01000000, cpu.get_h()),
             0x75 => Instruction::BitbR(0b01000000, cpu.get_l()),
+            0x76 => Instruction::BitbHl(0b01000000, mmu.read_byte(cpu.get_hl())),
 
             // bit 7
             0x7F => Instruction::BitbR(0b10000000, cpu.get_a()),
@@ -492,6 +511,7 @@ pub mod Decoder {
             0x7B => Instruction::BitbR(0b10000000, cpu.get_e()),
             0x7C => Instruction::BitbR(0b10000000, cpu.get_h()),
             0x7D => Instruction::BitbR(0b10000000, cpu.get_l()),
+            0x7E => Instruction::BitbHl(0b10000000, mmu.read_byte(cpu.get_hl())),
             
             _ => panic!(
                 "Unreconized cb byte {:#X} on pc {:#X}\n CPU STATE: {:?}",
@@ -499,4 +519,3 @@ pub mod Decoder {
             ),
         }
     }
-}
