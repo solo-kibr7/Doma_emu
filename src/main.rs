@@ -7,12 +7,14 @@ use std::io::Read;
 use crate::mmu::MMU;
 use crate::cpu::CPU;
 use crate::instruction::Instruction;
-use crate::decoder::Decoder;
+use crate::ppu::PPU;
+//use crate::executor::execute;
 
 mod mmu;
 mod cpu;
 mod instruction;
-mod decoder;
+mod ppu;
+
 
 
 pub struct Gameboy {
