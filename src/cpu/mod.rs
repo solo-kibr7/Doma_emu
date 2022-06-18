@@ -1,5 +1,6 @@
-pub use crate::mmu::MMU;
+pub use crate::mmu::{MMU, interrupts};
 pub use crate::instruction::Instruction;
+pub use crate::dbg::DBG;
 
 use std::fmt;
 
@@ -22,12 +23,13 @@ pub struct CPU {
     halted: bool,
     ime: bool, // Interrupt Master Enable Flag
     ei: bool, // enable_interrupt_next
+    ticks: usize,
 }
 impl fmt::Debug for CPU {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CPU {{ A: {:#X}, B: {:#X}, C: {:#X}, D: {:#X}, E: {:#X}, H: {:#X}, L: {:#X} }} \nflags: {{ Z: {:?}, N: {:?}, H: {:?}, C: {:?} }}\n{{ pc: {:#X}, sp: {:#X} }}",
+            "CPU {{ A: {:#X}, B: {:#X}, C: {:#X}, D: {:#X}, E: {:#X}, H: {:#X}, L: {:#X} }} \nflags: {{ Z: {:?}, N: {:?}, H: {:?}, C: {:?} }}\n{{ pc: {:#X}, sp: {:#X} }}\n{{ ticks:{:#X} }}",
             self.a,
             self.b,
             self.c,
@@ -41,7 +43,29 @@ impl fmt::Debug for CPU {
             self.get_flag_c(),
             self.pc,
             self.sp,
+            self.ticks,
         )
+    }
+}
+impl Default for CPU {
+    fn default() -> Self {
+        let mut cpu = CPU {
+            a: 0x01,
+            b: 0x00,
+            c: 0x13,
+            d: 0x00,
+            e: 0xD8,
+            f: 0xB0, // Flags
+            h: 0x01, // addr
+            l: 0x4D, // addr
+            sp: 0xFFFE, // Stack Pointer
+            pc: 0x0100, // Program Counter
+            halted: false,
+            ime: false,
+            ei: false,
+            ticks: 0,
+        };
+        cpu
     }
 }
 
@@ -61,6 +85,7 @@ impl CPU {
             halted: false,
             ime: false,
             ei: false,
+            ticks: 0,
         };
         cpu
     }
@@ -122,6 +147,13 @@ impl CPU {
         self.sp
     }
 
+    pub fn set_pc(&mut self, pc: u16) {
+        self.pc = pc;
+    }
+    pub fn set_sp(&mut self, sp: u16) {
+        self.sp = sp;
+    }
+
     pub fn get_af(&mut self) -> u16 {
         let a: u16 = (self.a as u16) << 8;
         a | (self.f as u16)
@@ -181,12 +213,30 @@ impl CPU {
         (n << 4) | (n >> 4)
     }
 
+    pub fn push_stack(&mut self, mmu: &mut MMU) {
+        let addr1: u8 = ((self.pc & 0xFF00) >> 8) as u8;
+        let addr2: u8 = (self.pc & 0x00FF) as u8;
+        self.sp = self.sp.wrapping_sub(1);
+        mmu.write_byte(self.sp, addr1);
+        self.sp = self.sp.wrapping_sub(1);
+        mmu.write_byte(self.sp, addr2);
+    }
+
+    pub fn pop_stack(&mut self, mmu:&mut MMU) -> u16 {
+        let low = mmu.read_byte(self.sp) as u16;
+        self.sp = self.sp.wrapping_add(1);
+        let high = mmu.read_byte(self.sp) as u16;
+        self.sp = self.sp.wrapping_add(1);
+        (high << 8) | low
+    }
+
     // decode instructions
     pub fn decode(&mut self, byte: u8, mmu: &MMU) -> Instruction {
         let n1 = mmu.read_byte(self.pc + 1) as u16;
         let n2 = mmu.read_byte(self.pc + 2) as u16;
         // d16 is nn
         let d16: u16 = (n2 << 8) | n1;
+        //println!("d16: {:#X} or n1 {:#X} and n2 {:#X}", d16, n1, n2);
 
         opcodes::decoder(self, mmu, byte, n1, d16)
     }
@@ -203,19 +253,83 @@ impl CPU {
         execute::executer(self, instruction, mmu)
     }
 
-    pub fn run_instruction(&mut self, mmu: &mut MMU) {
+    pub fn run_instruction(&mut self, mmu: &mut MMU) -> u8 {
         let byte = mmu.read_byte(self.pc);
 
-        println!("Current byte {:#x} | pc: {:#X}", byte as u8, self.pc);
+        
 
         let instruction = self.decode(byte, mmu);
+        if self.pc > 0xc000 {
+            //println!("Current byte {:#x} | pc: {:#X}", byte as u8, self.pc);
+
+            //println!("Current instruction {:?} \n ", instruction);
+
+            //println!("Cpu: {:?} \n ", self);
+        }
+
+        /*println!("Current byte {:#x} | pc: {:#X}", byte as u8, self.pc);
 
         println!("Current instruction {:?} \n ", instruction);
 
-        self.excute(&instruction, mmu);
+        println!("Current instruction {:?} \n ", self);*/
+
+        self.excute(&instruction, mmu)
     }
 
-    pub fn do_cycle(&mut self, mmu: &mut MMU) {
+    pub fn do_cycle(&mut self, mmu: &mut MMU, dbg: &mut DBG) {
+        if self.halted {
+            self.cycle(mmu, 1);
+            if mmu.interrupts.read_requested() != 0 {
+                self.halted = false;
+            }
+        } else {
+            dbg.dbg_update(mmu);
+            dbg.dbg_print();
+            let m = self.run_instruction(mmu);
+            self.cycle(mmu, m);
+        }
+        if self.ime {
+            self.interrupt_handle(mmu);
+            self.ei = false;
+        }
+        if self.ei {
+            self.ime = true;
+        }
+    }
+    pub fn cycle(&mut self, mmu: &mut MMU, cycles: u8) {
+        let n = cycles * 4;
+        for x in 0..n {
+            self.ticks += 1;
+            mmu.timer.ticks(&mut mmu.interrupts);
+        }
+    }
+    pub fn interrupt_handle(&mut self, mmu:&mut MMU) {
+        // Push PC part 1
+        // trigger write oam bug because of the increment
+        
+        //bus.trigger_write_oam_bug(self.reg_sp);
 
+        self.sp = self.sp.wrapping_sub(1);
+        //cpu.set_sp(sp);
+        mmu.write_byte(self.sp, (self.pc >> 8) as u8);
+
+        /*if let Some(int_type) = bus.take_next_interrupt() {
+            cpu_state = CpuState::RunningInterrupt(int_type);
+            self.reg_pc = INTERRUPTS_VECTOR[int_type as usize];
+        } else {
+            // Interrupt cancelled
+            self.reg_pc = 0;
+        }*/
+        if mmu.interrupts.get_highest_interrupt(self).is_some() {
+            let highest_interrupt = mmu.interrupts.get_highest_interrupt(self).unwrap();
+            self.pc = mmu.interrupts.interrupt_addresses(highest_interrupt);
+        } else {
+            // why would this happen???
+            self.pc = 0;
+        }
+        
+        // Push PC part 2
+        self.sp = self.sp.wrapping_sub(1);
+        mmu.write_byte(self.sp, self.pc as u8);
     }
 }

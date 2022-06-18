@@ -15,6 +15,7 @@ pub enum Instruction {
     LdER2(u8, bool),
     LdHR2(u8, bool),
     LdLR2(u8, bool),
+    LdHlR2(u8),
 
     LdnA(u8, u8),
     Ldn16A(u16, u8),
@@ -87,36 +88,50 @@ pub enum Instruction {
     SwapHl(u8),
     Daa,
     Cpl(u8),
+    Ccf,
     Scf,
     Nop,
     Halt,
+    Stop,
     Di,
     Ei,
-
-
 
     //Rotates and Shifts
     Rlca(u8),
     Rla(u8),
+    Rrca(u8),
+    Rra(u8),
+    RlcN(u8, u8),
     RlN(u8, u8),
-    RlHl(u8),
+    RrcN(u8, u8),
+    RrN(u8, u8),
     SlaN(u8, u8),
     SraN(u8, u8),
+    SrlN(u8, u8),
 
     //bit opcodes
     BitbR(u8, u8),
     BitbHl(u8, u8),
-    //do BitbHl too
+    SetbR(u8, u8, u8),
+    ResbR(u8, u8, u8),
 
     //jumps
+    Jpnn(u16),
+    Jpcc(u16, u8),
+    JpHl(u16),
     JrN(i8),
-    JrZ(i8, bool),
-    JrC(i8, bool),
+    Jrcc(i8, u8),
 
     //calls
     Callnn(u16),
+    Callcc(u16, u8),
+
+    //restarts
+    Rst(u8),
 
     //returns
-    Ret(u16),
+    Ret,
+    Retcc(u8),
+    Reti,
 
 }

@@ -73,6 +73,11 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
             cpu.pc += 1;
             if *b {2} else {1}
         },
+        Instruction::LdHlR2(r2) => {
+            mmu.write_byte(cpu.get_hl(), *r2);
+            cpu.pc += 1;
+            2
+        },
 
         Instruction::LdnA(n, a) => {
             match n {
@@ -153,12 +158,12 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
 
 
         Instruction::LdHnA(n) => {
-            mmu.write_byte(0xFF00 + *n as u16, cpu.a);
+            mmu.write_byte(0xFF00 | *n as u16, cpu.a);
             cpu.pc += 2;
             3
         },
         Instruction::LdHAn(n) => {
-            cpu.a = mmu.read_byte(0xFF00 + *n as u16);
+            cpu.a = mmu.read_byte(0xFF00 | *n as u16);
             cpu.pc += 2;
             3
         },
@@ -400,17 +405,17 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
         },
 
         Instruction::Cp(n) => {
-            cpu.alu_sub(n, false);
+            cpu.a = cpu.alu_sub(n, false);
             cpu.pc += 1;
             1
         },
         Instruction::CpHl(n) => {
-            cpu.alu_sub(n, false);
+            cpu.a = cpu.alu_sub(n, false);
             cpu.pc += 1;
             2
         },
         Instruction::CpD8(n) => {
-            cpu.alu_sub(n, false);
+            cpu.a = cpu.alu_sub(n, false);
             cpu.pc += 2;
             2
         },
@@ -573,12 +578,19 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
             cpu.set_flag_z(a == 0);
             cpu.a = a;
             1
-        }
+        },
 
         Instruction::Cpl(a) => {
             cpu.a = !a; 
             cpu.set_flag_n(true); 
             cpu.set_flag_h(true); 
+            cpu.pc += 1;
+            1
+        },
+        Instruction::Ccf => {
+            cpu.set_flag_c(!cpu.get_flag_c());
+            cpu.set_flag_h(false);
+            cpu.set_flag_n(false);
             cpu.pc += 1;
             1
         },
@@ -610,17 +622,21 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
                 //        and it will continue executing normally, we can think
                 //        of it as being stuck in a large array of NOP instructions
                 //        until an interrupt is requested.
-
+            cpu.set_halted(true);
+            cpu.pc += 1;
+            1
+        },
+        Instruction::Stop => {
+            cpu.pc += 2;
             1
         },
 
-        Instruction::Di => {cpu.ime = false; 1},
+        Instruction::Di => {cpu.ime = false; cpu.pc += 1; 1},
 
-        Instruction::Ei => {cpu.ei = true; 1},
+        Instruction::Ei => {cpu.ei = true; cpu.pc += 1; 1},
 
 
         // rotate and shift
-
         Instruction::Rlca(a) => {
             let c = a & 0x80 == 0x80;
             
@@ -645,41 +661,133 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
             cpu.pc += 1;
             1
         },
+        Instruction::Rrca(a) => {
+            let c = a & 0x01 == 0x01;
+            
+            cpu.a = (a >> 1) | (if c {0x80} else {0});
 
-        Instruction::RlN(n, v) => {
+            cpu.set_flag_z(false);
+            cpu.set_flag_n(false);
+            cpu.set_flag_h(false);
+            cpu.set_flag_c(c);
+            cpu.pc += 1;
+            1
+        },
+        Instruction::Rra(a) => {
+            let c = a & 0x01 == 0x01;
+            
+            cpu.a = (a >> 1) | (if cpu.get_flag_c() {0x80} else {0});
+
+            cpu.set_flag_z(false);
+            cpu.set_flag_n(false);
+            cpu.set_flag_h(false);
+            cpu.set_flag_c(c);
+            cpu.pc += 1;
+            1
+        },
+
+        Instruction::RlcN(n, v) => {
             let c = v & 0x80 == 0x80;
-            let r = (v << 1) | (if cpu.get_flag_c() {1} else {0});
+            let r = (v << 1) | (if c {1} else {0});
+
+            cpu.set_flag_z(r == 0);
+            cpu.set_flag_n(false);
+            cpu.set_flag_h(false);
+            cpu.set_flag_c(c);
+            cpu.pc += 2;
             match n {
-                0 => {cpu.a = r;},
-                1 => {cpu.b = r;},
-                2 => {cpu.c = r;},
-                3 => {cpu.d = r;},
-                4 => {cpu.e = r;},
-                5 => {cpu.h = r;},
-                6 => {cpu.l = r;},
+                0 => {cpu.a = r; 2},
+                1 => {cpu.b = r; 2},
+                2 => {cpu.c = r; 2},
+                3 => {cpu.d = r; 2},
+                4 => {cpu.e = r; 2},
+                5 => {cpu.h = r; 2},
+                6 => {cpu.l = r; 2},
+                7 => {mmu.write_byte(cpu.get_hl(), r); 4},
                 _ => panic!(
                     "Can't find {:?} for instruction {:#?}",
                     n, instruction,
                 ),
             }
-            cpu.set_flag_z(r == 0);
-            cpu.set_flag_n(false);
-            cpu.set_flag_h(false);
-            cpu.set_flag_c(c);
-            cpu.pc += 2;
-            2
         },
-        Instruction::RlHl(v) => {
+
+        Instruction::RlN(n, v) => {
             let c = v & 0x80 == 0x80;
             let r = (v << 1) | (if cpu.get_flag_c() {1} else {0});
-            mmu.write_byte(cpu.get_hl(), r);
+
             cpu.set_flag_z(r == 0);
             cpu.set_flag_n(false);
             cpu.set_flag_h(false);
             cpu.set_flag_c(c);
             cpu.pc += 2;
-            4
+            match n {
+                0 => {cpu.a = r; 2},
+                1 => {cpu.b = r; 2},
+                2 => {cpu.c = r; 2},
+                3 => {cpu.d = r; 2},
+                4 => {cpu.e = r; 2},
+                5 => {cpu.h = r; 2},
+                6 => {cpu.l = r; 2},
+                7 => {mmu.write_byte(cpu.get_hl(), r); 4},
+                _ => panic!(
+                    "Can't find {:?} for instruction {:#?}",
+                    n, instruction,
+                ),
+            }
         },
+
+        Instruction::RrcN(n, v) => {
+            let c = v & 0x01 == 0x01;
+            
+            let r = (v >> 1) | (if c {0x80} else {0});
+
+            cpu.set_flag_z(r == 0);
+            cpu.set_flag_n(false);
+            cpu.set_flag_h(false);
+            cpu.set_flag_c(c);
+            cpu.pc += 2;
+            match n {
+                0 => {cpu.a = r; 2},
+                1 => {cpu.b = r; 2},
+                2 => {cpu.c = r; 2},
+                3 => {cpu.d = r; 2},
+                4 => {cpu.e = r; 2},
+                5 => {cpu.h = r; 2},
+                6 => {cpu.l = r; 2},
+                7 => {mmu.write_byte(cpu.get_hl(), r); 4},
+                _ => panic!(
+                    "Can't find {:?} for instruction {:#?}",
+                    n, instruction,
+                ),
+            }
+        },
+
+        Instruction::RrN(n, v) => {
+            let c = v & 0x01 == 0x01;
+            
+            let r = (v >> 1) | (if cpu.get_flag_c() {0x80} else {0});
+
+            cpu.set_flag_z(r == 0);
+            cpu.set_flag_n(false);
+            cpu.set_flag_h(false);
+            cpu.set_flag_c(c);
+            cpu.pc += 2;
+            match n {
+                0 => {cpu.a = r; 2},
+                1 => {cpu.b = r; 2},
+                2 => {cpu.c = r; 2},
+                3 => {cpu.d = r; 2},
+                4 => {cpu.e = r; 2},
+                5 => {cpu.h = r; 2},
+                6 => {cpu.l = r; 2},
+                7 => {mmu.write_byte(cpu.get_hl(), r); 4},
+                _ => panic!(
+                    "Can't find {:?} for instruction {:#?}",
+                    n, instruction,
+                ),
+            }
+        },
+        
         Instruction::SlaN(n, v) => {
             let c = v & 0x80 == 0x80;
             let r = v << 1;
@@ -727,6 +835,30 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
             }
         },
 
+        Instruction::SrlN(n, v) => {
+            let c = v & 0x01 == 0x01;
+            let r = v >> 1;
+            cpu.set_flag_z(r == 0);
+            cpu.set_flag_n(false);
+            cpu.set_flag_h(false);
+            cpu.set_flag_c(c);
+            cpu.pc += 2;
+            match n {
+                0 => {cpu.a = r; 2},
+                1 => {cpu.b = r; 2},
+                2 => {cpu.c = r; 2},
+                3 => {cpu.d = r; 2},
+                4 => {cpu.e = r; 2},
+                5 => {cpu.h = r; 2},
+                6 => {cpu.l = r; 2},
+                7 => {mmu.write_byte(cpu.get_hl(), r); 4},
+                _ => panic!(
+                    "Can't find {:?} for instruction {:#?}",
+                    n, instruction,
+                ),
+            }
+        },
+
         Instruction::BitbR(pos, r) => {
             let result: u8 = r & pos;
             cpu.set_flag_z(result == 0);
@@ -743,54 +875,150 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
             cpu.pc += 2;
             4
         },
+
+        Instruction::SetbR(pos, r, n) => {
+            cpu.pc += 2;
+            match n {
+                0 => {cpu.a = r | pos; 2},
+                1 => {cpu.b = r | pos; 2},
+                2 => {cpu.c = r | pos; 2},
+                3 => {cpu.d = r | pos; 2},
+                4 => {cpu.e = r | pos; 2},
+                5 => {cpu.h = r | pos; 2},
+                6 => {cpu.l = r | pos; 2},
+                7 => {mmu.write_byte(cpu.get_hl(), r | pos); 4},
+                _ => panic!(
+                    "Can't find {:?} for instruction {:#?}",
+                    n, instruction,
+                ),
+            }
+        },
+
+        Instruction::ResbR(pos, r, n) => {
+            cpu.pc += 2;
+            match n {
+                0 => {cpu.a = r & !pos; 2},
+                1 => {cpu.b = r & ! pos; 2},
+                2 => {cpu.c = r & ! pos; 2},
+                3 => {cpu.d = r & ! pos; 2},
+                4 => {cpu.e = r & ! pos; 2},
+                5 => {cpu.h = r & ! pos; 2},
+                6 => {cpu.l = r & ! pos; 2},
+                7 => {mmu.write_byte(cpu.get_hl(), r | pos); 4},
+                _ => panic!(
+                    "Can't find {:?} for instruction {:#?}",
+                    n, instruction,
+                ),
+            }
+        },
+
+        Instruction::Jpnn(nn) => {
+            cpu.pc = *nn;
+            //cpu.pc += 3;
+            4
+        },
+
+        Instruction::Jpcc(nn, m) => {
+            //cpu.pc += 3;
+            match m {
+                0 => {if !cpu.get_flag_z() {cpu.pc = *nn; 4} else {cpu.pc += 3; 3}},
+                1 => {if cpu.get_flag_z() {cpu.pc = *nn; 4} else {cpu.pc += 3; 3}},
+                2 => {if !cpu.get_flag_c() {cpu.pc = *nn; 4} else {cpu.pc += 3; 3}},
+                3 => {if cpu.get_flag_c() {cpu.pc = *nn; 4} else {cpu.pc += 3; 3}},
+                _ => panic!(
+                    "Can't find {:?} for instruction {:#?}",
+                    m, instruction,
+                ),
+            }
+        },
+
+        Instruction::JpHl(hl) => {
+            cpu.pc = *hl;
+            cpu.pc += 1;
+            1
+        },
+
+
         Instruction::JrN(n) => {
             cpu.pc = cpu.pc.wrapping_add(*n as u16);
             cpu.pc += 2;
-            2
-        }
-        // cover both JrNz and JrZ
-        Instruction::JrZ(n, b) => {
-            // if b is false, then Z needs to be reset to jump
-            // if b is true, then Z needs to be set to jump
-            if cpu.get_flag_z() == *b {
-                //println!("sum: {:?}", cpu.pc.wrapping_add(*n as u16));
-                cpu.pc = cpu.pc.wrapping_add(*n as u16);
-            }
-            cpu.pc += 2;
-            2
+            3
         },
-        // cover both JrNc and JrC
-        Instruction::JrC(n, b) => {
-            // if b is false, then C needs to be reset to jump
-            // if b is true, then C needs to be set to jump
-            if cpu.get_flag_n() == *b {
-                println!("sum: {:#x}", cpu.pc.wrapping_add(*n as u16));
-                cpu.pc = cpu.pc.wrapping_add(*n as u16);
-            }
+
+        Instruction::Jrcc(n, m) => {
             cpu.pc += 2;
-            2
+            match m {
+                0 => {if !cpu.get_flag_z() {cpu.pc = cpu.pc.wrapping_add(*n as u16); 3} else {2}},
+                1 => {if cpu.get_flag_z() {cpu.pc = cpu.pc.wrapping_add(*n as u16); 3} else {2}},
+                2 => {if !cpu.get_flag_c() {cpu.pc = cpu.pc.wrapping_add(*n as u16); 3} else {2}},
+                3 => {if cpu.get_flag_c() {cpu.pc = cpu.pc.wrapping_add(*n as u16); 3} else {2}},
+                _ => panic!(
+                    "Can't find {:?} for instruction {:#?}",
+                    m, instruction,
+                ),
+            }
         },
 
         Instruction::Callnn(d16) => {
             cpu.pc += 3;
-            let addr1: u8 = ((cpu.pc & 0xFF00) >> 8) as u8;
-            let addr2: u8 = (cpu.pc & 0x00FF) as u8;
-            cpu.sp = cpu.sp.wrapping_sub(1);
-            mmu.write_byte(cpu.sp, addr1);
-            cpu.sp = cpu.sp.wrapping_sub(1);
-            mmu.write_byte(cpu.sp, addr2);
+            cpu.push_stack(mmu);
             cpu.pc = *d16;
-            3
+
+            6
         },
 
-        Instruction::Ret(sp) => {
+        Instruction::Callcc(d16, n) => {
+            cpu.pc += 3;
+            let mut v = 0;
+            match n {
+                0 => {if !cpu.get_flag_z() {cpu.push_stack(mmu); cpu.pc = *d16; v = 6;} else {v = 3;}},
+                1 => {if cpu.get_flag_z() {cpu.push_stack(mmu); cpu.pc = *d16; v = 6;} else {v = 3;}},
+                2 => {if !cpu.get_flag_c() {cpu.push_stack(mmu); cpu.pc = *d16; v = 6;} else {v = 3;}},
+                3 => {if cpu.get_flag_c() {cpu.push_stack(mmu); cpu.pc = *d16; v = 6;} else {v = 3;}},
+                _ => panic!(
+                    "Can't find {:?} for instruction {:#?}",
+                    n, instruction,
+                ),
+            }
+            v
+        },
+
+        Instruction::Rst(n) => {
+            cpu.push_stack(mmu);
+            cpu.pc = *n as u16;
+            cpu.pc += 1;
+            4
+        },
+
+        Instruction::Ret => {
             //println!("CPU STATE: {:?}", cpu);
-            let low = mmu.read_byte(*sp) as u16;
-            cpu.sp = sp.wrapping_add(1);
-            let high = mmu.read_byte(cpu.sp) as u16;
-            cpu.sp = sp.wrapping_add(1);
-            cpu.pc = (high << 8) | low;
-            2
+            //println!("pop: {:#X}", cpu.pop_stack(mmu));
+            cpu.pc = cpu.pop_stack(mmu);
+            //cpu.pc += 1;
+            4
+        },
+
+        Instruction::Retcc(n) => {
+            let mut v = 0;
+            match n {
+                0 => {if !cpu.get_flag_z() {cpu.pc = cpu.pop_stack(mmu); v = 5;} else {v = 2;}},
+                1 => {if cpu.get_flag_z() {cpu.pc = cpu.pop_stack(mmu); v = 5;} else {v = 2;}},
+                2 => {if !cpu.get_flag_c() {cpu.pc = cpu.pop_stack(mmu); v = 5;} else {v = 2;}},
+                3 => {if cpu.get_flag_c() {cpu.pc = cpu.pop_stack(mmu); v = 5;} else {v = 2;}},
+                _ => panic!(
+                    "Can't find {:?} for instruction {:#?}",
+                    n, instruction,
+                ),
+            }
+            cpu.pc += 1;
+            v
+        },
+
+        Instruction::Reti => {
+            cpu.pc = cpu.pop_stack(mmu);
+            cpu.pc += 1;
+            cpu.ime = true;
+            4
         },
 
         _ => panic!(
@@ -798,6 +1026,5 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
             instruction, cpu.pc, cpu
         ),
     }
-
 }
 

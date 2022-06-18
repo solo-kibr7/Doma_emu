@@ -1,4 +1,5 @@
 pub use crate::cpu::CPU;
+pub use crate::mmu::MMU;
 use bitflags::bitflags;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -51,25 +52,18 @@ pub struct Interrupts {
     enabled: InterruptFlags,
     requested: InterruptFlags,
 }
+
 impl Default for Interrupts {
     fn default() -> Self {
         Self {
             enabled: InterruptFlags::from_bits_truncate(0),
-            requested: InterruptFlags::from_bits_truncate(0),
+            // why 1 and not 0???
+            requested: InterruptFlags::from_bits_truncate(1),
         }
     }
 }
 
 impl Interrupts {
-    pub fn int_check(&mut self, address: u16, interrupt: InterruptType, cpu:&mut CPU) {
-        let it: InterruptFlags = interrupt.into();
-        if self.requested.bits() & it.bits() != 0 && self.enabled.bits() & it.bits() != 0 {
-            self.write_requested(self.requested.bits() & !it.bits());
-            cpu.set_halted(false);
-            cpu.set_ime(false);
-    
-        }
-    }
     pub fn write_enabled(&mut self, value: u8) {
         self.enabled = InterruptFlags::from_bits_truncate(value);
     }
@@ -77,11 +71,79 @@ impl Interrupts {
         self.requested = InterruptFlags::from_bits_truncate(value);
     }
 
-    pub fn read_interrupt_enable(&self) -> u8 {
+    pub fn read_enable(&self) -> u8 {
         self.enabled.bits()
     }
-    pub fn read_interrupt_requested(&self) -> u8 {
+    pub fn read_requested(&self) -> u8 {
         self.requested.bits()
     }
-    
+
+    pub fn int_check(&mut self, interrupt: InterruptType, cpu:&mut CPU) -> bool {
+        let it:InterruptFlags = interrupt.into();
+        if self.requested.bits() & it.bits() != 0 && self.enabled.bits() & it.bits() != 0 {
+            self.write_requested(self.requested.bits() & !it.bits());
+            cpu.set_halted(false);
+            cpu.set_ime(false);
+            return true;
+        }
+        false
+    }
+
+    pub fn get_highest_interrupt(&mut self, cpu:&mut CPU) -> Option<InterruptType> {
+        let mut count = 0;
+        while count < 5 {
+            if self.int_check(InterruptType::try_from(count).unwrap(), cpu) {
+                return Some(InterruptType::try_from(count).unwrap());
+            }
+            count += 1;
+        }
+        None
+    }
+
+    pub fn interrupt_addresses(&mut self, int_type: InterruptType) -> u16 {
+        match int_type {
+            InterruptType::Vblank => 0x40,
+            InterruptType::LcdStat => 0x48,
+            InterruptType::Timer => 0x50,
+            InterruptType::Serial => 0x58,
+            InterruptType::Joypad => 0x60,
+        }
+    }
+    /*
+    pub fn interrupt_handle(&mut self, cpu:&mut CPU, mmu:&mut MMU) {
+            let pc = cpu.get_pc();
+            let mut sp = cpu.get_sp();
+
+            // Push PC part 1
+            // trigger write oam bug because of the increment
+            
+            //bus.trigger_write_oam_bug(self.reg_sp);
+
+            sp = sp.wrapping_sub(1);
+            cpu.set_sp(sp);
+            mmu.write_byte(cpu.get_sp(), (pc >> 8) as u8);
+
+            /*if let Some(int_type) = bus.take_next_interrupt() {
+                cpu_state = CpuState::RunningInterrupt(int_type);
+                self.reg_pc = INTERRUPTS_VECTOR[int_type as usize];
+            } else {
+                // Interrupt cancelled
+                self.reg_pc = 0;
+            }*/
+            if self.get_highest_interrupt(cpu).is_some() {
+                let highest_interrupt = self.get_highest_interrupt(cpu).unwrap();
+                cpu.set_pc(self.interrupt_addresses(highest_interrupt));
+            } else {
+                // why would this happen???
+                cpu.set_pc(0);
+            }
+            
+            // Push PC part 2
+            sp = sp.wrapping_sub(1);
+            cpu.set_sp(sp);
+            mmu.write_byte(cpu.get_sp(), pc as u8);
+    }*/
+    pub fn request_interrupt(&mut self, interrupt: InterruptType) {
+        self.requested.insert(interrupt.into());
+    }
 }
