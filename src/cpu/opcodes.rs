@@ -82,6 +82,14 @@ pub use crate::cpu::CPU;
             0x6C => Instruction::LdLR2(cpu.get_h(), false),
             0x6D => Instruction::LdLR2(cpu.get_l(), false),
             0x6E => Instruction::LdLR2(mmu.read_byte(cpu.get_hl()), true),
+
+            0x77 => Instruction::LdHlR2(cpu.get_a()),
+            0x70 => Instruction::LdHlR2(cpu.get_b()),
+            0x71 => Instruction::LdHlR2(cpu.get_c()),
+            0x72 => Instruction::LdHlR2(cpu.get_d()),
+            0x73 => Instruction::LdHlR2(cpu.get_e()),
+            0x74 => Instruction::LdHlR2(cpu.get_h()),
+            0x75 => Instruction::LdHlR2(cpu.get_l()),
     
             // 4. LD n,A
             // Description:  Put value A into n.
@@ -141,7 +149,8 @@ pub use crate::cpu::CPU;
             // Description: Put HL into Stack Pointer (SP).
             0xF9 => Instruction::LdSpHl(cpu.get_hl()),
 
-            // 4. LDHL SP,n
+
+            // 3-4. LDHL SP,n
             // Description:  Put SP + n effective address into HL.
             0xF8 => Instruction::LdHlSp(n1 as i8),
 
@@ -282,6 +291,7 @@ pub use crate::cpu::CPU;
             0x2D => Instruction::DecN(6, cpu.get_l()),
             0x35 => Instruction::DecHl(cpu.get_hl()),
     
+
             // 16-Bit Arithmetic
             // 1. ADD HL,n
             // Description: Add n to HL
@@ -307,24 +317,39 @@ pub use crate::cpu::CPU;
 
             // Miscellaneous
 
-            //
+            //2. DAA
+            // Description: Decimal adjust register A. 
+            // This instruction adjusts register A so that the correct
+            // representation of Binary Coded Decimal (BCD) is obtained.
             0x27 => Instruction::Daa,
+
             // 3. CPL
             // Description:  Complement A register. (Flip all bits.)
             0x2F => Instruction::Cpl(cpu.get_a()),
+
+            // 4. CCF
+            // Description:  Complement carry flag.
+            0x3F => Instruction::Ccf,
 
             // 5. SCF
             // Description:  Set Carry flag
             0x37 => Instruction::Scf,
 
             // 6. NOP
-            // Description:  No operation.
+            // Description: No operation.
             0x00 => Instruction::Nop,
 
+            // 7. HALT 
+            // Description: Power down CPU until an interrupt occurs. 
+            // Use this when ever possible to reduce energy consumption
             0x76 => Instruction::Halt,
 
+            // 8. STOP
+            // Description: Halt CPU & LCD display until button pressed
+            0x10 => Instruction::Stop,
+
             // 9. DI
-            // Description: This instruction disables interrupts but not  immediately. 
+            // Description: This instruction disables interrupts but not immediately. 
             // Interrupts are disabled after  instruction after DI is executed.
             0xF3 => Instruction::Di,
 
@@ -332,7 +357,6 @@ pub use crate::cpu::CPU;
             // Description:  Enable interrupts. This intruction enables interrupts but not immediately.
             // Interrupts are enabled after  instruction after EI is executed.
             0xFB => Instruction::Ei,
-
 
     
             // rotate and shift
@@ -343,8 +367,30 @@ pub use crate::cpu::CPU;
             // 2. RLA
             // Description: Rotate A left through Carry flag.
             0x17 => Instruction::Rla(cpu.get_a()),
+
+            // 3. RRCA
+            // Description: Rotate A right. Old bit 0 to Carry flag.
+            0x0F => Instruction::Rrca(cpu.get_a()),
+
+            // 4. RRA
+            // Description: Rotate A right through Carry flag
+            0x1F => Instruction::Rra(cpu.get_a()),
     
             // jumps
+            // 1. JP nn
+            // Description:  Jump to address nn
+            0xC3 => Instruction::Jpnn(d16),
+
+            // 2. JP cc,nn
+            // Description: Jump to address n if following condition is true:
+            0xC2 => Instruction::Jpcc(d16, 0),
+            0xCA => Instruction::Jpcc(d16, 1),
+            0xD2 => Instruction::Jpcc(d16, 2),
+            0xDA => Instruction::Jpcc(d16, 3),
+
+            // 3. JP (HL)
+            // Description:  Jump to address contained in HL.
+            0xE9 => Instruction::JpHl(cpu.get_hl()),
 
             // 4. JR n
             // Description: Add n to current address and jump to it
@@ -352,20 +398,50 @@ pub use crate::cpu::CPU;
 
             //5. JR cc,n
             // Description: If following condition is true then add n to current address and jump to it:
-            0x20 => Instruction::JrZ(n1 as i8, false),
-            0x28 => Instruction::JrZ(n1 as i8, true),
-            0x30 => Instruction::JrC(n1 as i8, false),
-            0x38 => Instruction::JrC(n1 as i8, true),
+            0x20 => Instruction::Jrcc(n1 as i8, 0),
+            0x28 => Instruction::Jrcc(n1 as i8, 1),
+            0x30 => Instruction::Jrcc(n1 as i8, 2),
+            0x38 => Instruction::Jrcc(n1 as i8, 3),
 
             // calls
             // 1. CALL nn
-            // Description: Push address of next instruction onto stack and then  jump to address nn
+            // Description: Push address of next instruction onto stack and then jump to address nn
             0xCD => Instruction::Callnn(d16),
+
+            // 2. CALL cc,nn
+            // Description:  Call address n if following condition is true:
+            0xC4 => Instruction::Callcc(d16, 0),
+            0xCC => Instruction::Callcc(d16, 1),
+            0xD4 => Instruction::Callcc(d16, 2),
+            0xDC => Instruction::Callcc(d16, 3),
+
+            //restarts
+            // 1. RST n
+            // Description:  Push present address onto stack. Jump to address $0000 + n.
+            0xC7 => Instruction::Rst(0x00),
+            0xCF => Instruction::Rst(0x08),
+            0xD7 => Instruction::Rst(0x10),
+            0xDF => Instruction::Rst(0x18),
+            0xE7 => Instruction::Rst(0x20),
+            0xEF => Instruction::Rst(0x28),
+            0xF7 => Instruction::Rst(0x30),
+            0xFF => Instruction::Rst(0x38),
 
             //returns
             // 1. RET
             // Description: Pop two bytes from stack & jump to that address
-            0xC9 => Instruction::Ret(cpu.get_sp()),
+            0xC9 => Instruction::Ret,
+
+            // 2. RET cc
+            // Description: Return if following condition is true:
+            0xC0 => Instruction::Retcc(0),
+            0xC8 => Instruction::Retcc(1),
+            0xD0 => Instruction::Retcc(2),
+            0xD8 => Instruction::Retcc(3),
+
+            // 3. RETI
+            // Description: Pop two bytes from stack & jump to that address then  enable interrupts.
+            0xD9 => Instruction::Reti,
     
             0xCB => {
                 //cpu.pc += 1;
@@ -397,8 +473,19 @@ pub use crate::cpu::CPU;
             0x36 => Instruction::SwapHl(mmu.read_byte(cpu.get_hl())),
 
             // rotates and shifts
+            // 5. RLC n
+            // Description: Rotate n left. Old bit 7 to Carry flag.
+            0x07 => Instruction::RlcN(0, cpu.get_a()),
+            0x00 => Instruction::RlcN(1, cpu.get_b()),
+            0x01 => Instruction::RlcN(2, cpu.get_c()),
+            0x02 => Instruction::RlcN(3, cpu.get_d()),
+            0x03 => Instruction::RlcN(4, cpu.get_e()),
+            0x04 => Instruction::RlcN(5, cpu.get_h()),
+            0x05 => Instruction::RlcN(6, cpu.get_l()),
+            0x06 => Instruction::RlcN(7, mmu.read_byte(cpu.get_hl())),
+
             // 6. RL n
-            // Description:  Rotate n left through Carry flag.
+            // Description: Rotate n left through Carry flag.
             0x17 => Instruction::RlN(0, cpu.get_a()),
             0x10 => Instruction::RlN(1, cpu.get_b()),
             0x11 => Instruction::RlN(2, cpu.get_c()),
@@ -406,7 +493,30 @@ pub use crate::cpu::CPU;
             0x13 => Instruction::RlN(4, cpu.get_e()),
             0x14 => Instruction::RlN(5, cpu.get_h()),
             0x15 => Instruction::RlN(6, cpu.get_l()),
-            0x16 => Instruction::RlHl(mmu.read_byte(cpu.get_hl())),
+            0x16 => Instruction::RlN(7, mmu.read_byte(cpu.get_hl())),
+
+
+            // 7. RRC n
+            // Description: Rotate n right. Old bit 0 to Carry flag.
+            0x0F => Instruction::RrcN(0, cpu.get_a()),
+            0x08 => Instruction::RrcN(1, cpu.get_b()),
+            0x09 => Instruction::RrcN(2, cpu.get_c()),
+            0x0A => Instruction::RrcN(3, cpu.get_d()),
+            0x0B => Instruction::RrcN(4, cpu.get_e()),
+            0x0C => Instruction::RrcN(5, cpu.get_h()),
+            0x0D => Instruction::RrcN(6, cpu.get_l()),
+            0x0E => Instruction::RrcN(7, mmu.read_byte(cpu.get_hl())),
+
+            // 8. RR n
+            // Description: Rotate n right through Carry flag.
+            0x1F => Instruction::RrN(0, cpu.get_a()),
+            0x18 => Instruction::RrN(1, cpu.get_b()),
+            0x19 => Instruction::RrN(2, cpu.get_c()),
+            0x1A => Instruction::RrN(3, cpu.get_d()),
+            0x1B => Instruction::RrN(4, cpu.get_e()),
+            0x1C => Instruction::RrN(5, cpu.get_h()),
+            0x1D => Instruction::RrN(6, cpu.get_l()),
+            0x1E => Instruction::RrN(7, mmu.read_byte(cpu.get_hl())),
 
             // 9. SLA n
             // Description:  Shift n left into Carry. LSB of n set to 0
@@ -429,6 +539,17 @@ pub use crate::cpu::CPU;
             0x2C => Instruction::SraN(5, cpu.get_h()),
             0x2D => Instruction::SraN(6, cpu.get_l()),
             0x2E => Instruction::SraN(7, mmu.read_byte(cpu.get_hl())),
+
+            // 11. SRL n
+            // Description:  Shift n right into Carry. MSB set to 0.
+            0x3F => Instruction::SrlN(0, cpu.get_a()),
+            0x38 => Instruction::SrlN(1, cpu.get_b()),
+            0x39 => Instruction::SrlN(2, cpu.get_c()),
+            0x3A => Instruction::SrlN(3, cpu.get_d()),
+            0x3B => Instruction::SrlN(4, cpu.get_e()),
+            0x3C => Instruction::SrlN(5, cpu.get_h()),
+            0x3D => Instruction::SrlN(6, cpu.get_l()),
+            0x3E => Instruction::SrlN(7, mmu.read_byte(cpu.get_hl())),
 
             // 1. BIT b,rDescription:
             // Test bit b in register r.
@@ -512,6 +633,173 @@ pub use crate::cpu::CPU;
             0x7C => Instruction::BitbR(0b10000000, cpu.get_h()),
             0x7D => Instruction::BitbR(0b10000000, cpu.get_l()),
             0x7E => Instruction::BitbHl(0b10000000, mmu.read_byte(cpu.get_hl())),
+
+            // 2. SET b,r
+            // Description:  Set bit b in register r.
+
+            // bit 0
+            0xC7 => Instruction::SetbR(0b00000001, cpu.get_a(), 0),
+            0xC0 => Instruction::SetbR(0b00000001, cpu.get_b(), 1),
+            0xC1 => Instruction::SetbR(0b00000001, cpu.get_c(), 2),
+            0xC2 => Instruction::SetbR(0b00000001, cpu.get_d(), 3),
+            0xC3 => Instruction::SetbR(0b00000001, cpu.get_e(), 4),
+            0xC4 => Instruction::SetbR(0b00000001, cpu.get_h(), 5),
+            0xC5 => Instruction::SetbR(0b00000001, cpu.get_l(), 6),
+            0xC6 => Instruction::SetbR(0b00000001, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 1
+            0xCF => Instruction::SetbR(0b00000010, cpu.get_a(), 0),
+            0xC8 => Instruction::SetbR(0b00000010, cpu.get_b(), 1),
+            0xC9 => Instruction::SetbR(0b00000010, cpu.get_c(), 2),
+            0xCA => Instruction::SetbR(0b00000010, cpu.get_d(), 3),
+            0xCB => Instruction::SetbR(0b00000010, cpu.get_e(), 4),
+            0xCC => Instruction::SetbR(0b00000010, cpu.get_h(), 5),
+            0xCD => Instruction::SetbR(0b00000010, cpu.get_l(), 6),
+            0xCE => Instruction::SetbR(0b00000010, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 2
+            0xD7 => Instruction::SetbR(0b00000100, cpu.get_a(), 0),
+            0xD0 => Instruction::SetbR(0b00000100, cpu.get_b(), 1),
+            0xD1 => Instruction::SetbR(0b00000100, cpu.get_c(), 2),
+            0xD2 => Instruction::SetbR(0b00000100, cpu.get_d(), 3),
+            0xD3 => Instruction::SetbR(0b00000100, cpu.get_e(), 4),
+            0xD4 => Instruction::SetbR(0b00000100, cpu.get_h(), 5),
+            0xD5 => Instruction::SetbR(0b00000100, cpu.get_l(), 6),
+            0xD6 => Instruction::SetbR(0b00000100, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 3
+            0xDF => Instruction::SetbR(0b00001000, cpu.get_a(), 0),
+            0xD8 => Instruction::SetbR(0b00001000, cpu.get_b(), 1),
+            0xD9 => Instruction::SetbR(0b00001000, cpu.get_c(), 2),
+            0xDA => Instruction::SetbR(0b00001000, cpu.get_d(), 3),
+            0xDB => Instruction::SetbR(0b00001000, cpu.get_e(), 4),
+            0xDC => Instruction::SetbR(0b00001000, cpu.get_h(), 5),
+            0xDD => Instruction::SetbR(0b00001000, cpu.get_l(), 6),
+            0xDE => Instruction::SetbR(0b00001000, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 4
+            0xE7 => Instruction::SetbR(0b00010000, cpu.get_a(), 0),
+            0xE0 => Instruction::SetbR(0b00010000, cpu.get_b(), 1),
+            0xE1 => Instruction::SetbR(0b00010000, cpu.get_c(), 2),
+            0xE2 => Instruction::SetbR(0b00010000, cpu.get_d(), 3),
+            0xE3 => Instruction::SetbR(0b00010000, cpu.get_e(), 4),
+            0xE4 => Instruction::SetbR(0b00010000, cpu.get_h(), 5),
+            0xE5 => Instruction::SetbR(0b00010000, cpu.get_l(), 6),
+            0xE6 => Instruction::SetbR(0b00010000, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 5
+            0xEF => Instruction::SetbR(0b00100000, cpu.get_a(), 0),
+            0xE8 => Instruction::SetbR(0b00100000, cpu.get_b(), 1),
+            0xE9 => Instruction::SetbR(0b00100000, cpu.get_c(), 2),
+            0xEA => Instruction::SetbR(0b00100000, cpu.get_d(), 3),
+            0xEB => Instruction::SetbR(0b00100000, cpu.get_e(), 4),
+            0xEC => Instruction::SetbR(0b00100000, cpu.get_h(), 5),
+            0xED => Instruction::SetbR(0b00100000, cpu.get_l(), 6),
+            0xEE => Instruction::SetbR(0b00100000, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 6
+            0xF7 => Instruction::SetbR(0b01000000, cpu.get_a(), 0),
+            0xF0 => Instruction::SetbR(0b01000000, cpu.get_b(), 1),
+            0xF1 => Instruction::SetbR(0b01000000, cpu.get_c(), 2),
+            0xF2 => Instruction::SetbR(0b01000000, cpu.get_d(), 3),
+            0xF3 => Instruction::SetbR(0b01000000, cpu.get_e(), 4),
+            0xF4 => Instruction::SetbR(0b01000000, cpu.get_h(), 5),
+            0xF5 => Instruction::SetbR(0b01000000, cpu.get_l(), 6),
+            0xF6 => Instruction::SetbR(0b01000000, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 7
+            0xFF => Instruction::SetbR(0b10000000, cpu.get_a(), 0),
+            0xF8 => Instruction::SetbR(0b10000000, cpu.get_b(), 1),
+            0xF9 => Instruction::SetbR(0b10000000, cpu.get_c(), 2),
+            0xFA => Instruction::SetbR(0b10000000, cpu.get_d(), 3),
+            0xFB => Instruction::SetbR(0b10000000, cpu.get_e(), 4),
+            0xFC => Instruction::SetbR(0b10000000, cpu.get_h(), 5),
+            0xFD => Instruction::SetbR(0b10000000, cpu.get_l(), 6),
+            0xFE => Instruction::SetbR(0b10000000, mmu.read_byte(cpu.get_hl()), 7),
+
+            // 3. RES b,r
+            // Description: Reset bit b in register r
+
+            // bit 0
+            0x87 => Instruction::ResbR(0b00000001, cpu.get_a(), 0),
+            0x80 => Instruction::ResbR(0b00000001, cpu.get_b(), 1),
+            0x81 => Instruction::ResbR(0b00000001, cpu.get_c(), 2),
+            0x82 => Instruction::ResbR(0b00000001, cpu.get_d(), 3),
+            0x83 => Instruction::ResbR(0b00000001, cpu.get_e(), 4),
+            0x84 => Instruction::ResbR(0b00000001, cpu.get_h(), 5),
+            0x85 => Instruction::ResbR(0b00000001, cpu.get_l(), 6),
+            0x86 => Instruction::ResbR(0b00000001, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 1
+            0x8F => Instruction::ResbR(0b00000010, cpu.get_a(), 0),
+            0x88 => Instruction::ResbR(0b00000010, cpu.get_b(), 1),
+            0x89 => Instruction::ResbR(0b00000010, cpu.get_c(), 2),
+            0x8A => Instruction::ResbR(0b00000010, cpu.get_d(), 3),
+            0x8B => Instruction::ResbR(0b00000010, cpu.get_e(), 4),
+            0x8C => Instruction::ResbR(0b00000010, cpu.get_h(), 5),
+            0x8D => Instruction::ResbR(0b00000010, cpu.get_l(), 6),
+            0x8E => Instruction::ResbR(0b00000010, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 2
+            0x97 => Instruction::ResbR(0b00000100, cpu.get_a(), 0),
+            0x90 => Instruction::ResbR(0b00000100, cpu.get_b(), 1),
+            0x91 => Instruction::ResbR(0b00000100, cpu.get_c(), 2),
+            0x92 => Instruction::ResbR(0b00000100, cpu.get_d(), 3),
+            0x93 => Instruction::ResbR(0b00000100, cpu.get_e(), 4),
+            0x94 => Instruction::ResbR(0b00000100, cpu.get_h(), 5),
+            0x95 => Instruction::ResbR(0b00000100, cpu.get_l(), 6),
+            0x96 => Instruction::ResbR(0b00000100, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 3
+            0x9F => Instruction::ResbR(0b00001000, cpu.get_a(), 0),
+            0x98 => Instruction::ResbR(0b00001000, cpu.get_b(), 1),
+            0x99 => Instruction::ResbR(0b00001000, cpu.get_c(), 2),
+            0x9A => Instruction::ResbR(0b00001000, cpu.get_d(), 3),
+            0x9B => Instruction::ResbR(0b00001000, cpu.get_e(), 4),
+            0x9C => Instruction::ResbR(0b00001000, cpu.get_h(), 5),
+            0x9D => Instruction::ResbR(0b00001000, cpu.get_l(), 6),
+            0x9E => Instruction::ResbR(0b00001000, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 4
+            0xA7 => Instruction::ResbR(0b00010000, cpu.get_a(), 0),
+            0xA0 => Instruction::ResbR(0b00010000, cpu.get_b(), 1),
+            0xA1 => Instruction::ResbR(0b00010000, cpu.get_c(), 2),
+            0xA2 => Instruction::ResbR(0b00010000, cpu.get_d(), 3),
+            0xA3 => Instruction::ResbR(0b00010000, cpu.get_e(), 4),
+            0xA4 => Instruction::ResbR(0b00010000, cpu.get_h(), 5),
+            0xA5 => Instruction::ResbR(0b00010000, cpu.get_l(), 6),
+            0xA6 => Instruction::ResbR(0b00010000, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 5
+            0xAF => Instruction::ResbR(0b00100000, cpu.get_a(), 0),
+            0xA8 => Instruction::ResbR(0b00100000, cpu.get_b(), 1),
+            0xA9 => Instruction::ResbR(0b00100000, cpu.get_c(), 2),
+            0xAA => Instruction::ResbR(0b00100000, cpu.get_d(), 3),
+            0xAB => Instruction::ResbR(0b00100000, cpu.get_e(), 4),
+            0xAC => Instruction::ResbR(0b00100000, cpu.get_h(), 5),
+            0xAD => Instruction::ResbR(0b00100000, cpu.get_l(), 6),
+            0xAE => Instruction::ResbR(0b00100000, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 6
+            0xB7 => Instruction::ResbR(0b01000000, cpu.get_a(), 0),
+            0xB0 => Instruction::ResbR(0b01000000, cpu.get_b(), 1),
+            0xB1 => Instruction::ResbR(0b01000000, cpu.get_c(), 2),
+            0xB2 => Instruction::ResbR(0b01000000, cpu.get_d(), 3),
+            0xB3 => Instruction::ResbR(0b01000000, cpu.get_e(), 4),
+            0xB4 => Instruction::ResbR(0b01000000, cpu.get_h(), 5),
+            0xB5 => Instruction::ResbR(0b01000000, cpu.get_l(), 6),
+            0xB6 => Instruction::ResbR(0b01000000, mmu.read_byte(cpu.get_hl()), 7),
+
+            // bit 7
+            0xBF => Instruction::ResbR(0b10000000, cpu.get_a(), 0),
+            0xB8 => Instruction::ResbR(0b10000000, cpu.get_b(), 1),
+            0xB9 => Instruction::ResbR(0b10000000, cpu.get_c(), 2),
+            0xBA => Instruction::ResbR(0b10000000, cpu.get_d(), 3),
+            0xBB => Instruction::ResbR(0b10000000, cpu.get_e(), 4),
+            0xBC => Instruction::ResbR(0b10000000, cpu.get_h(), 5),
+            0xBD => Instruction::ResbR(0b10000000, cpu.get_l(), 6),
+            0xBE => Instruction::ResbR(0b10000000, mmu.read_byte(cpu.get_hl()), 7),
+
             
             _ => panic!(
                 "Unreconized cb byte {:#X} on pc {:#X}\n CPU STATE: {:?}",
