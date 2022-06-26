@@ -41,6 +41,8 @@ impl MMU {
     pub fn read_byte(&self, address: u16) -> u8 {
         if 0xFF00 <= address && address < 0xFF80 {
             self.read_io(address)
+        } else if address == 0xFFFF {
+            self.interrupts.read_enable()
         } else {
             self.ram[address as usize]
         }
@@ -49,6 +51,8 @@ impl MMU {
     pub fn write_byte(&mut self, address: u16, value: u8) {
         if 0xFF00 <= address && address < 0xFF80 {
             self.write_io(address, value);
+        } else if address == 0xFFFF {
+            self.interrupts.write_enabled(value);
         } else {
             self.ram[address as usize] = value;
         }

@@ -37,7 +37,8 @@ impl Default for Timer {
     fn default() -> Self {
         Self {
             // why???
-            divider: 0x0008, // divider value if boot_rom is present
+            // 0x0008
+            divider: 0xABCC, // divider value if boot_rom is present
             counter: 0,
             modulo: 0,
             control: TimerControl::from_bits_truncate(0),
