@@ -83,13 +83,14 @@ pub use crate::cpu::CPU;
             0x6D => Instruction::LdLR2(cpu.get_l(), false),
             0x6E => Instruction::LdLR2(mmu.read_byte(cpu.get_hl()), true),
 
-            0x77 => Instruction::LdHlR2(cpu.get_a()),
-            0x70 => Instruction::LdHlR2(cpu.get_b()),
-            0x71 => Instruction::LdHlR2(cpu.get_c()),
-            0x72 => Instruction::LdHlR2(cpu.get_d()),
-            0x73 => Instruction::LdHlR2(cpu.get_e()),
-            0x74 => Instruction::LdHlR2(cpu.get_h()),
-            0x75 => Instruction::LdHlR2(cpu.get_l()),
+            0x77 => Instruction::LdHlR2(cpu.get_a(), false),
+            0x70 => Instruction::LdHlR2(cpu.get_b(), false),
+            0x71 => Instruction::LdHlR2(cpu.get_c(), false),
+            0x72 => Instruction::LdHlR2(cpu.get_d(), false),
+            0x73 => Instruction::LdHlR2(cpu.get_e(), false),
+            0x74 => Instruction::LdHlR2(cpu.get_h(), false),
+            0x75 => Instruction::LdHlR2(cpu.get_l(), false),
+            0x36 => Instruction::LdHlR2(n1 as u8, true),
     
             // 4. LD n,A
             // Description:  Put value A into n.
@@ -102,7 +103,6 @@ pub use crate::cpu::CPU;
             0x6F => Instruction::LdnA(5, cpu.get_a()),
             0x02 => Instruction::Ldn16A(cpu.get_bc(), cpu.get_a()),
             0x12 => Instruction::Ldn16A(cpu.get_de(), cpu.get_a()),
-            0x77 => Instruction::Ldn16A(cpu.get_hl(), cpu.get_a()),
             0xEA => Instruction::Lda16A(d16, cpu.get_a()),
     
             // 5. LD A,(C)
@@ -211,15 +211,15 @@ pub use crate::cpu::CPU;
 
             // 4. SBC A,n
             // Description:  Subtract n + Carry flag from A.
-            0x9F => Instruction::SubN(cpu.get_a()),
-            0x98 => Instruction::SubN(cpu.get_b()),
-            0x99 => Instruction::SubN(cpu.get_c()),
-            0x9A => Instruction::SubN(cpu.get_d()),
-            0x9B => Instruction::SubN(cpu.get_e()),
-            0x9C => Instruction::SubN(cpu.get_h()),
-            0x9D => Instruction::SubN(cpu.get_l()),
-            0x9E => Instruction::SubHl(mmu.read_byte(cpu.get_hl())),
-            0xDE => Instruction::SubD8(n1 as u8),
+            0x9F => Instruction::SbcN(cpu.get_a()),
+            0x98 => Instruction::SbcN(cpu.get_b()),
+            0x99 => Instruction::SbcN(cpu.get_c()),
+            0x9A => Instruction::SbcN(cpu.get_d()),
+            0x9B => Instruction::SbcN(cpu.get_e()),
+            0x9C => Instruction::SbcN(cpu.get_h()),
+            0x9D => Instruction::SbcN(cpu.get_l()),
+            0x9E => Instruction::SbcHl(mmu.read_byte(cpu.get_hl())),
+            0xDE => Instruction::SbcD8(n1 as u8),
 
             // 5. AND nDescription: 
             // Logically AND n with A, result in A.
@@ -271,13 +271,13 @@ pub use crate::cpu::CPU;
             
             // 9. INC n
             // Description:  Increment register n.
-            0x3C => Instruction::IncN(0),
-            0x04 => Instruction::IncN(1),
-            0x0C => Instruction::IncN(2),
-            0x14 => Instruction::IncN(3),
-            0x1C => Instruction::IncN(4),
-            0x24 => Instruction::IncN(5),
-            0x2C => Instruction::IncN(6),
+            0x3C => Instruction::IncN(0, cpu.get_a()),
+            0x04 => Instruction::IncN(1, cpu.get_b()),
+            0x0C => Instruction::IncN(2, cpu.get_c()),
+            0x14 => Instruction::IncN(3, cpu.get_d()),
+            0x1C => Instruction::IncN(4, cpu.get_e()),
+            0x24 => Instruction::IncN(5, cpu.get_h()),
+            0x2C => Instruction::IncN(6, cpu.get_l()),
             0x34 => Instruction::IncHl(cpu.get_hl()),
     
             // 10. DEC n
@@ -300,6 +300,9 @@ pub use crate::cpu::CPU;
             0x29 => Instruction::AddHlN(cpu.get_hl()),
             0x39 => Instruction::AddHlN(cpu.get_sp()),
 
+            // 2. ADD SP,n
+            // Description:  Add n to Stack Pointer (SP).
+            0xE8 => Instruction::AddSpN(n1 as i8),
 
             // 3. INC nn
             // Description: Increment register nn

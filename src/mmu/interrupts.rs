@@ -58,17 +58,17 @@ impl Default for Interrupts {
         Self {
             enabled: InterruptFlags::from_bits_truncate(0),
             // why 1 and not 0???
-            requested: InterruptFlags::from_bits_truncate(1),
+            requested: InterruptFlags::from_bits_truncate(0),
         }
     }
 }
 
 impl Interrupts {
     pub fn write_enabled(&mut self, value: u8) {
-        self.enabled = InterruptFlags::from_bits_truncate(value);
+        self.enabled.clone_from(&InterruptFlags::from_bits_truncate(value));
     }
     pub fn write_requested(&mut self, value: u8) {
-        self.requested = InterruptFlags::from_bits_truncate(value);
+        self.requested.clone_from(&InterruptFlags::from_bits_truncate(value));
     }
 
     pub fn read_enable(&self) -> u8 {
@@ -78,7 +78,7 @@ impl Interrupts {
         self.requested.bits()
     }
 
-    pub fn int_check(&mut self, interrupt: InterruptType, cpu:&mut CPU) -> bool {
+    pub fn int_check_remove(&mut self, interrupt: InterruptType, cpu:&mut CPU) -> bool {
         let it:InterruptFlags = interrupt.into();
         if self.requested.bits() & it.bits() != 0 && self.enabled.bits() & it.bits() != 0 {
             self.write_requested(self.requested.bits() & !it.bits());
@@ -88,11 +88,31 @@ impl Interrupts {
         }
         false
     }
+    pub fn int_check(&mut self, interrupt: InterruptType) -> bool {
+        let it:InterruptFlags = interrupt.into();
+        //println!("if:{:#X}, ie:{:#X}, it:{:#X} b:{}", self.requested.bits(), self.enabled.bits(), it.bits(), self.requested.bits() & it.bits() != 0);
+        if self.requested.bits() & it.bits() != 0 && self.enabled.bits() & it.bits() != 0 {
+            return true;
+        }
+        false
+    }
 
     pub fn get_highest_interrupt(&mut self, cpu:&mut CPU) -> Option<InterruptType> {
         let mut count = 0;
         while count < 5 {
-            if self.int_check(InterruptType::try_from(count).unwrap(), cpu) {
+            if self.int_check_remove(InterruptType::try_from(count).unwrap(), cpu) {
+                return Some(InterruptType::try_from(count).unwrap());
+            }
+            count += 1;
+        }
+        None
+    }
+
+    pub fn peek_highest_interrupt(&mut self) -> Option<InterruptType> {
+        let mut count = 0;
+        while count < 5 {
+            //println!("int check: {}", self.int_check(InterruptType::try_from(count).unwrap()));
+            if self.int_check(InterruptType::try_from(count).unwrap()) {
                 return Some(InterruptType::try_from(count).unwrap());
             }
             count += 1;

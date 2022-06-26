@@ -73,10 +73,9 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
             cpu.pc += 1;
             if *b {2} else {1}
         },
-        Instruction::LdHlR2(r2) => {
+        Instruction::LdHlR2(r2, b) => {
             mmu.write_byte(cpu.get_hl(), *r2);
-            cpu.pc += 1;
-            2
+            if *b {cpu.pc += 2; 3} else {cpu.pc += 1; 2}
         },
 
         Instruction::LdnA(n, a) => {
@@ -111,12 +110,10 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
             2
         },
         Instruction::LdCa(a) => {
-            cpu.c = mmu.read_byte(0xFF00 | *a as u16);
+            mmu.write_byte(0xFF00 | cpu.c as u16, *a);
             cpu.pc += 2;
             2
         },
-        
-        // put LddAhl
         
 
         Instruction::LddAHl(hl16) => {
@@ -164,6 +161,7 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
         },
         Instruction::LdHAn(n) => {
             cpu.a = mmu.read_byte(0xFF00 | *n as u16);
+            //cpu.a = 0x90;
             cpu.pc += 2;
             3
         },
@@ -198,22 +196,19 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
             3
         },
         Instruction::LdHlSp(s8) => {
-            let sp = cpu.sp as i16;
-            let result = if *s8 >= 0 {sp.wrapping_add(*s8 as i16)} else {sp.wrapping_sub(s8.abs() as i16)};
-            if *s8 >= 0 {
-                cpu.set_flag_c(((cpu.sp & 0xFF) as i32 + *s8 as i32) as u16 > 0xFF);
-                cpu.set_flag_h((cpu.sp & 0xF) + (*s8 as u8 & 0xF) as u16 > 0xF);
-            } else {
-                cpu.set_flag_c((result as u16 & 0xFF) <= cpu.sp & 0xFF);
-                cpu.set_flag_h((result as u16 & 0xF) <= cpu.sp & 0xF);
-            }
-            cpu.set_hl(result as u16);
+            let sp = cpu.get_sp();
+            cpu.set_flag_z(false);
+            cpu.set_flag_n(false);
+            cpu.set_flag_h((sp & 0x000F) + (*s8 as u16 & 0x000F) > 0x000F);
+            cpu.set_flag_c((sp & 0x00FF) + (*s8 as u16 & 0x00FF) > 0x00FF);
+            cpu.set_hl(cpu.sp.wrapping_add(*s8 as u16));
             cpu.pc += 2;
             3
         },
         Instruction::LdnnSp(d16) => {
             mmu.write_byte(*d16, (cpu.sp & 0x00FF) as u8);
             mmu.write_byte(d16.wrapping_add(1), (cpu.sp >> 8) as u8);
+            cpu.pc += 3;
             5
         },
 
@@ -233,7 +228,7 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
             let value2 = mmu.read_byte(cpu.sp);
             cpu.sp = cpu.sp.wrapping_add(1);
             match n {
-                0 => {cpu.a = value2; cpu.f = value1;},
+                0 => {cpu.a = value2; cpu.f = value1 & 0xF0;},
                 1 => {cpu.b = value2; cpu.c = value1;},
                 2 => {cpu.d = value2; cpu.e = value1;},
                 3 => {cpu.h = value2; cpu.l = value1;},
@@ -341,34 +336,31 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
         },
         Instruction::OrN(n) => {
             let result = cpu.a | *n;
-            cpu.a = result;
             cpu.set_flag_z(result == 0);
             cpu.set_flag_n(false);
             cpu.set_flag_h(false);
             cpu.set_flag_c(false);
-            // hl has more cycles
+            cpu.a = result;
             cpu.pc += 1;
             1
         },
         Instruction::OrHl(n) => {
             let result = cpu.a | *n;
-            cpu.a = result;
             cpu.set_flag_z(result == 0);
             cpu.set_flag_n(false);
             cpu.set_flag_h(false);
             cpu.set_flag_c(false);
-            // hl has more cycles
+            cpu.a = result;
             cpu.pc += 1;
             2
         },
         Instruction::OrD8(n) => {
             let result = cpu.a | *n;
-            cpu.a = result;
             cpu.set_flag_z(result == 0);
             cpu.set_flag_n(false);
             cpu.set_flag_h(false);
             cpu.set_flag_c(false);
-            // hl has more cycles
+            cpu.a = result;
             cpu.pc += 2;
             2
         },
@@ -405,24 +397,24 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
         },
 
         Instruction::Cp(n) => {
-            cpu.a = cpu.alu_sub(n, false);
+            cpu.alu_sub(n, false);
             cpu.pc += 1;
             1
         },
         Instruction::CpHl(n) => {
-            cpu.a = cpu.alu_sub(n, false);
+            cpu.alu_sub(n, false);
             cpu.pc += 1;
             2
         },
         Instruction::CpD8(n) => {
-            cpu.a = cpu.alu_sub(n, false);
+            cpu.alu_sub(n, false);
             cpu.pc += 2;
             2
         },
 
-        Instruction::IncN(n) => {
+        Instruction::IncN(v, n) => {
             let r: u8;
-            match n {
+            match v {
                 0 => {r = cpu.a.wrapping_add(1); cpu.a = r;},
                 1 => {r = cpu.b.wrapping_add(1); cpu.b = r;},
                 2 => {r = cpu.c.wrapping_add(1); cpu.c = r;},
@@ -495,13 +487,24 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
         Instruction::AddHlN(nn) => {
             let hl = cpu.get_hl();
             let r = hl.wrapping_add(*nn);
-            cpu.set_flag_h((hl & 0x07FF) + (hl & 0x07FF) > 0x07FF);
+            cpu.set_flag_h((hl & 0x07FF) + (nn & 0x07FF) > 0x07FF);
             cpu.set_flag_n(false);
-            cpu.set_flag_c(hl > 0xFFFF - nn);
+            cpu.set_flag_c(hl > (0xFFFF - nn));
 
             cpu.set_hl(r);
             cpu.pc += 1;
             2
+        },
+
+        Instruction::AddSpN(n) => {
+            let sp = cpu.get_sp();
+            cpu.set_flag_z(false);
+            cpu.set_flag_n(false);
+            cpu.set_flag_h((sp & 0x000F) + (*n as u16 & 0x000F) > 0x000F);
+            cpu.set_flag_c((sp & 0x00FF) + (*n as u16 & 0x00FF) > 0x00FF);
+            cpu.sp = cpu.sp.wrapping_add(*n as u16);
+            cpu.pc += 2;
+            4
         },
 
         Instruction::IncNN(n, nn) => {
@@ -560,23 +563,26 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
         },
 
         Instruction::Daa => {
-            let mut a = cpu.a;
-            let mut adjust = if cpu.get_flag_c() {0x60} else {0x00};
-            
-            if cpu.get_flag_h() {adjust |= 0x06;};
-
-            if cpu.get_flag_n() {
-                a = a.wrapping_sub(adjust);
-            } else {
-                if a & 0x0F > 0x09 {adjust |= 0x06;};
-                if a > 0x99 {adjust |= 0x60;};
-                a = a.wrapping_add(adjust);
+            let mut carry = false;
+            if !cpu.get_flag_n() {
+                if cpu.get_flag_c() || cpu.a > 0x99 {
+                    cpu.a = cpu.a.wrapping_add(0x60);
+                    carry = true;
+                }
+                if cpu.get_flag_h() || cpu.a & 0x0f > 0x09 {
+                    cpu.a = cpu.a.wrapping_add(0x06);
+                }
+            } else if cpu.get_flag_c() {
+                carry = true;
+                cpu.a = cpu.a.wrapping_add(if cpu.get_flag_h() { 0x9a } else { 0xa0 });
+            } else if cpu.get_flag_h() {
+                cpu.a = cpu.a.wrapping_add(0xfa);
             }
 
-            cpu.set_flag_c(adjust >= 0x60);
+            cpu.set_flag_z(cpu.a == 0);
             cpu.set_flag_h(false);
-            cpu.set_flag_z(a == 0);
-            cpu.a = a;
+            cpu.set_flag_c(carry);
+            cpu.pc += 1;
             1
         },
 
@@ -904,7 +910,7 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
                 4 => {cpu.e = r & ! pos; 2},
                 5 => {cpu.h = r & ! pos; 2},
                 6 => {cpu.l = r & ! pos; 2},
-                7 => {mmu.write_byte(cpu.get_hl(), r | pos); 4},
+                7 => {mmu.write_byte(cpu.get_hl(), r & ! pos); 4},
                 _ => panic!(
                     "Can't find {:?} for instruction {:#?}",
                     n, instruction,
@@ -933,8 +939,8 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
         },
 
         Instruction::JpHl(hl) => {
-            cpu.pc = *hl;
             cpu.pc += 1;
+            cpu.pc = *hl;
             1
         },
 
@@ -984,21 +990,22 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
         },
 
         Instruction::Rst(n) => {
+            cpu.pc += 1;
             cpu.push_stack(mmu);
             cpu.pc = *n as u16;
-            cpu.pc += 1;
             4
         },
 
         Instruction::Ret => {
             //println!("CPU STATE: {:?}", cpu);
             //println!("pop: {:#X}", cpu.pop_stack(mmu));
+            cpu.pc += 1;
             cpu.pc = cpu.pop_stack(mmu);
-            //cpu.pc += 1;
             4
         },
 
         Instruction::Retcc(n) => {
+            cpu.pc += 1;
             let mut v = 0;
             match n {
                 0 => {if !cpu.get_flag_z() {cpu.pc = cpu.pop_stack(mmu); v = 5;} else {v = 2;}},
@@ -1010,13 +1017,12 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
                     n, instruction,
                 ),
             }
-            cpu.pc += 1;
             v
         },
 
         Instruction::Reti => {
-            cpu.pc = cpu.pop_stack(mmu);
             cpu.pc += 1;
+            cpu.pc = cpu.pop_stack(mmu);
             cpu.ime = true;
             4
         },

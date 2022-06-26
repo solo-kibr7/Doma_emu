@@ -29,7 +29,7 @@ impl fmt::Debug for CPU {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CPU {{ A: {:#X}, B: {:#X}, C: {:#X}, D: {:#X}, E: {:#X}, H: {:#X}, L: {:#X} }} \nflags: {{ Z: {:?}, N: {:?}, H: {:?}, C: {:?} }}\n{{ pc: {:#X}, sp: {:#X} }}\n{{ ticks:{:#X} }}",
+            "{{A:{:#X}, B:{:#X}, C:{:#X}, D:{:#X}, E:{:#X}, H:{:#X}, L:{:#X}}} {{ei:{} ime:{}}} \nflags: {{{}{}{}{}}} {{pc: {:#X}, sp: {:#X}, ticks:{:#X}}}",
             self.a,
             self.b,
             self.c,
@@ -37,10 +37,12 @@ impl fmt::Debug for CPU {
             self.e,
             self.h,
             self.l,
-            self.get_flag_z(),
-            self.get_flag_n(),
-            self.get_flag_h(),
-            self.get_flag_c(),
+            self.ei,
+            self.ime,
+            if self.get_flag_z() {"Z"} else {"-"},
+            if self.get_flag_n() {"N"} else {"-"},
+            if self.get_flag_h() {"H"} else {"-"},
+            if self.get_flag_c() {"C"} else {"-"},
             self.pc,
             self.sp,
             self.ticks,
@@ -187,6 +189,10 @@ impl CPU {
         self.ime = b;
     }
 
+    pub fn get_ticks(&mut self) -> usize {
+        self.ticks
+    }
+
     pub fn alu_add(&mut self, n: &u8, carry: bool) -> u8 {
         let c = if carry && self.get_flag_c() {1} else {0};
         let result = self.a.wrapping_add(*n).wrapping_add(c);
@@ -203,6 +209,7 @@ impl CPU {
         self.set_flag_h((self.a & 0x0F) < (*n & 0x0F) + c);
         self.set_flag_n(true);
         self.set_flag_c((self.a as u16) < (*n as u16) + (c as u16));
+        //println!("Print conditions: {:?} and result: {:#X}", carry && self.get_flag_c(), result);
         result
     }
     pub fn swap(&mut self, n: &u8) -> u8 {
@@ -259,13 +266,15 @@ impl CPU {
         
 
         let instruction = self.decode(byte, mmu);
-        if self.pc > 0xc000 {
-            //println!("Current byte {:#x} | pc: {:#X}", byte as u8, self.pc);
+        //190000
+        /* if self.ticks > 0x1D4000{
 
-            //println!("Current instruction {:?} \n ", instruction);
-
-            //println!("Cpu: {:?} \n ", self);
-        }
+            println!("{:?} {:?} ({:#X} {:#X}) \n", self, instruction, byte, mmu.read_byte(self.pc + 1));
+            /* println!(
+                "Counter:{:#X} IE:{:#X} IF:{:#X} Interrupt:{} \n", 
+                mmu.read_byte(0xFF04), mmu.read_byte(0xFFFF), mmu.read_byte(0xFF0F), 
+                mmu.interrupts.peek_highest_interrupt().is_some()); */
+        } */
 
         /*println!("Current byte {:#x} | pc: {:#X}", byte as u8, self.pc);
 
@@ -288,13 +297,14 @@ impl CPU {
             let m = self.run_instruction(mmu);
             self.cycle(mmu, m);
         }
-        if self.ime {
+        if self.ime && mmu.interrupts.peek_highest_interrupt().is_some() {
             self.interrupt_handle(mmu);
-            self.ei = false;
         }
         if self.ei {
             self.ime = true;
+            self.ei = false;
         }
+        
     }
     pub fn cycle(&mut self, mmu: &mut MMU, cycles: u8) {
         let n = cycles * 4;
@@ -308,28 +318,23 @@ impl CPU {
         // trigger write oam bug because of the increment
         
         //bus.trigger_write_oam_bug(self.reg_sp);
+        let pc = self.pc;
 
         self.sp = self.sp.wrapping_sub(1);
         //cpu.set_sp(sp);
-        mmu.write_byte(self.sp, (self.pc >> 8) as u8);
+        mmu.write_byte(self.sp, (pc >> 8) as u8);
 
-        /*if let Some(int_type) = bus.take_next_interrupt() {
-            cpu_state = CpuState::RunningInterrupt(int_type);
-            self.reg_pc = INTERRUPTS_VECTOR[int_type as usize];
-        } else {
-            // Interrupt cancelled
-            self.reg_pc = 0;
-        }*/
-        if mmu.interrupts.get_highest_interrupt(self).is_some() {
+
+        if mmu.interrupts.peek_highest_interrupt().is_some() {
             let highest_interrupt = mmu.interrupts.get_highest_interrupt(self).unwrap();
             self.pc = mmu.interrupts.interrupt_addresses(highest_interrupt);
         } else {
-            // why would this happen???
+            // Interrupt cancelled. Why would this happen??
             self.pc = 0;
         }
         
         // Push PC part 2
         self.sp = self.sp.wrapping_sub(1);
-        mmu.write_byte(self.sp, self.pc as u8);
+        mmu.write_byte(self.sp, pc as u8);
     }
 }

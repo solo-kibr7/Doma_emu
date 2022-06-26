@@ -15,7 +15,7 @@ pub enum Instruction {
     LdER2(u8, bool),
     LdHR2(u8, bool),
     LdLR2(u8, bool),
-    LdHlR2(u8),
+    LdHlR2(u8, bool),
 
     LdnA(u8, u8),
     Ldn16A(u16, u8),
@@ -72,7 +72,7 @@ pub enum Instruction {
     CpHl(u8),
     CpD8(u8),
 
-    IncN(u8),
+    IncN(u8, u8),
     IncHl(u16),
 
     DecN(u8, u8),
@@ -80,6 +80,7 @@ pub enum Instruction {
 
     // 16bit Arithmetic
     AddHlN(u16),
+    AddSpN(i8),
     IncNN(u8, u16),
     DecNN(u8, u16),
 
