@@ -1,4 +1,4 @@
-pub use crate::mmu::{MMU, interrupts};
+pub use crate::mmu::{MMU, interrupts, dma, DmaTransfer};
 pub use crate::instruction::Instruction;
 pub use crate::dbg::DBG;
 
@@ -51,7 +51,7 @@ impl fmt::Debug for CPU {
 }
 impl Default for CPU {
     fn default() -> Self {
-        let mut cpu = CPU {
+        CPU {
             a: 0x01,
             b: 0x00,
             c: 0x13,
@@ -66,14 +66,13 @@ impl Default for CPU {
             ime: false,
             ei: false,
             ticks: 0,
-        };
-        cpu
+        }
     }
 }
 
 impl CPU {
     pub fn new() -> CPU {
-        let mut cpu = CPU {
+        CPU {
             a: 0,
             b: 0,
             c: 0,
@@ -88,8 +87,7 @@ impl CPU {
             ime: false,
             ei: false,
             ticks: 0,
-        };
-        cpu
+        }
     }
 
     // get flags from register f
@@ -249,10 +247,6 @@ impl CPU {
     }
 
     pub fn cb_decode(&mut self, byte: u8, mmu: &MMU) -> Instruction {
-        let n1 = mmu.read_byte(self.pc + 2) as u16;
-        let n2 = mmu.read_byte(self.pc + 3) as u16;
-        let d16: u16 = (n2 << 8) | n1;
-
         opcodes::cb_decoder(self, byte, mmu)
     }
 
@@ -267,14 +261,14 @@ impl CPU {
 
         let instruction = self.decode(byte, mmu);
         //190000
-        /* if self.ticks > 0x1D4000{
+        if self.ticks > 0x2000{
 
             println!("{:?} {:?} ({:#X} {:#X}) \n", self, instruction, byte, mmu.read_byte(self.pc + 1));
             /* println!(
                 "Counter:{:#X} IE:{:#X} IF:{:#X} Interrupt:{} \n", 
                 mmu.read_byte(0xFF04), mmu.read_byte(0xFFFF), mmu.read_byte(0xFF0F), 
                 mmu.interrupts.peek_highest_interrupt().is_some()); */
-        } */
+        }
 
         /*println!("Current byte {:#x} | pc: {:#X}", byte as u8, self.pc);
 
@@ -307,10 +301,13 @@ impl CPU {
         
     }
     pub fn cycle(&mut self, mmu: &mut MMU, cycles: u8) {
-        let n = cycles * 4;
-        for x in 0..n {
-            self.ticks += 1;
-            mmu.timer.ticks(&mut mmu.interrupts);
+        //let n = cycles * 4;
+        for cycle in 0..cycles {
+            for tick in 0..4 {
+                self.ticks += 1;
+                mmu.timer.ticks(&mut mmu.interrupts);
+            }
+            mmu.dma_tick();
         }
     }
     pub fn interrupt_handle(&mut self, mmu:&mut MMU) {

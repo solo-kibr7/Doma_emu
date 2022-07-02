@@ -975,7 +975,7 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
 
         Instruction::Callcc(d16, n) => {
             cpu.pc += 3;
-            let mut v = 0;
+            let v;
             match n {
                 0 => {if !cpu.get_flag_z() {cpu.push_stack(mmu); cpu.pc = *d16; v = 6;} else {v = 3;}},
                 1 => {if cpu.get_flag_z() {cpu.push_stack(mmu); cpu.pc = *d16; v = 6;} else {v = 3;}},
@@ -1006,7 +1006,7 @@ pub fn executer(cpu: &mut CPU, instruction: &Instruction, mmu: &mut MMU) -> u8 {
 
         Instruction::Retcc(n) => {
             cpu.pc += 1;
-            let mut v = 0;
+            let v;
             match n {
                 0 => {if !cpu.get_flag_z() {cpu.pc = cpu.pop_stack(mmu); v = 5;} else {v = 2;}},
                 1 => {if cpu.get_flag_z() {cpu.pc = cpu.pop_stack(mmu); v = 5;} else {v = 2;}},

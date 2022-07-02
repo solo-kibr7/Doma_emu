@@ -14,10 +14,15 @@
 // 0xFFFF : IE Register
 
 pub use crate::timer::Timer;
+pub use crate::ppu::PPU;
 
 pub mod interrupts;
 pub mod serial;
+pub mod dma;
 
+pub trait DmaTransfer {
+    fn dma_tick(&mut self);
+}
 
 
 pub struct MMU {
@@ -25,21 +30,30 @@ pub struct MMU {
     pub serial: serial::Serial,
     pub timer: Timer,
     pub interrupts: interrupts::Interrupts,
+    ppu: PPU,
+    pub oam_dma: dma::OamDma,
 }
 
 impl MMU {
     pub fn new() -> MMU {
-        let mut mem = MMU { 
+        MMU { 
             ram: [0; 65536],
             serial: serial::Serial::new(),
             timer: Timer::default(),
             interrupts: interrupts::Interrupts::default(),
-        };
-        mem
+            ppu: PPU::default(),
+            oam_dma: dma::OamDma::default(),
+        }
     }
 
     pub fn read_byte(&self, address: u16) -> u8 {
-        if 0xFF00 <= address && address < 0xFF80 {
+        if 0x8000 <= address && address <= 0x9FFF {
+            self.ppu.read_vram(address)
+        } else if 0xFE00 <= address && address <= 0xFE9F {
+            if self.oam_dma.in_transfer {0xFF} else {
+                self.ppu.read_oam(address)
+            }
+        } else if 0xFF00 <= address && address <= 0xFF7F {
             self.read_io(address)
         } else if address == 0xFFFF {
             self.interrupts.read_enable()
@@ -49,7 +63,13 @@ impl MMU {
     }
 
     pub fn write_byte(&mut self, address: u16, value: u8) {
-        if 0xFF00 <= address && address < 0xFF80 {
+        if 0x8000 <= address && address <= 0x9FFF {
+            self.ppu.write_vram(address, value);
+        } else if 0xFE00 <= address && address <= 0xFE9F {
+            if !self.oam_dma.in_transfer {
+                self.ppu.write_oam(address, value);
+            }
+        } else if 0xFF00 <= address && address <= 0xFF7F {
             self.write_io(address, value);
         } else if address == 0xFFFF {
             self.interrupts.write_enabled(value);
@@ -64,6 +84,9 @@ impl MMU {
             0xFF01 => self.serial.get_data(),
             0xFF02 => self.serial.get_control(),
             0xFF04..=0xFF07 => self.timer.timer_read(address),
+            0xFF40..=0xFF45 => self.ppu.lcd.lcd_read(address),
+            0xFF46 => self.oam_dma.read_register(),
+            0xFF47..=0xFF4B => self.ppu.lcd.lcd_read(address),
             0xFF0F => self.interrupts.read_requested(),
             _ => self.ram[address as usize],
         }
@@ -76,6 +99,9 @@ impl MMU {
             0xFF05 => self.timer.write_counter(value),
             0xFF06 => self.timer.write_modulo(value),
             0xFF07 => self.timer.write_control(value),
+            0xFF40..=0xFF45 => self.ppu.lcd.lcd_write(address, value),
+            0xFF46 => self.oam_dma.dma_start(value),
+            0xFF47..=0xFF4B => self.ppu.lcd.lcd_write(address, value),
             0xFF0F => self.interrupts.write_requested(value),
             _ => self.ram[address as usize] = value,
         };
@@ -120,6 +146,22 @@ impl MMU {
         } else {
             //address == 0xFFFF
             "IE Register"
+        }
+    }
+}
+impl DmaTransfer for MMU {
+    fn dma_tick(&mut self) {
+        //println!("in_transfer:{}", self.oam_dma.in_transfer);
+        if self.oam_dma.in_transfer {
+            if self.oam_dma.start_delay > 0 {
+                self.oam_dma.start_delay -= 1;
+            } else {
+                // don't need the 0xFE00 but why not
+                self.ppu.write_oam(0xFE00 | self.oam_dma.address_byte as u16, 
+                    self.read_byte(self.oam_dma.value as u16 * 0x100 + self.oam_dma.address_byte as u16));
+                self.oam_dma.address_byte += 1;
+                self.oam_dma.in_transfer = self.oam_dma.address_byte < 0xA0;
+            }
         }
     }
 }
