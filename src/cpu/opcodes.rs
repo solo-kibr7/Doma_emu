@@ -802,11 +802,5 @@ pub use crate::cpu::CPU;
             0xBC => Instruction::ResbR(0b10000000, cpu.get_h(), 5),
             0xBD => Instruction::ResbR(0b10000000, cpu.get_l(), 6),
             0xBE => Instruction::ResbR(0b10000000, mmu.read_byte(cpu.get_hl()), 7),
-
-            
-            _ => panic!(
-                "Unreconized cb byte {:#X} on pc {:#X}\n CPU STATE: {:?}",
-                byte, cpu.get_pc(), cpu
-            ),
         }
     }

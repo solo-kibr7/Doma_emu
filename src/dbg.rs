@@ -1,5 +1,5 @@
 pub use crate::mmu::MMU;
-use ascii::AsciiCast;
+//use ascii::AsciiCast;
 
 #[derive(Debug)]
 pub struct DBG {
@@ -24,7 +24,7 @@ impl DBG {
         if mmu.read_byte(0xFF02) == 0x81 {
             let c: u8 = mmu.read_byte(0xFF01);
 
-            let a = c.to_ascii();
+            //let a = c.to_ascii();
 
             /*let mut letter = match a {
                 Ok(x) => x,
