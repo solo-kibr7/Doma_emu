@@ -1,11 +1,34 @@
 use bitflags::bitflags;
 
+pub mod state_machine;
+
 pub enum Mode {
     HBLANK,
     VBLANK,
     OAM,
-    XFER,
+    TRANSFER,
 }
+
+/* bitflags! {
+    struct ModeFlags: u8 {
+        const HBLANK   = 1 << 0;
+        const VBLANK   = 1 << 1;
+        const OAM      = 1 << 2;
+        const TRANSFER = 1 << 3;
+    }
+}
+
+impl From<Mode> for ModeFlags {
+    fn from(mode: Mode) -> Self {
+        match mode {
+            Mode::HBLANK => Self::HBLANK,
+            Mode::VBLANK => Self::VBLANK,
+            Mode::OAM => Self::OAM,
+            Mode::TRANSFER => Self::TRANSFER,
+        }
+    }
+} */
+
 
 bitflags! {
     struct LcdControl: u8 {
@@ -71,7 +94,7 @@ impl LcdControl {
 }
 
 bitflags! {
-    struct LcdStatus: u8 {
+    pub(super) struct LcdStatus: u8 {
         const STAT_INTERRUPT   = 1 << 6;
         const OAM_INTERRUPT    = 1 << 5;
         const VBLANK_INTERRUPT = 1 << 4;
@@ -102,8 +125,17 @@ impl LcdStatus {
         self.set(Self::EQUALS_FLAG, value);
     }
 
-    fn current_mode(&self) -> u8 {
+    pub fn current_mode(&self) -> u8 {
         self.bits() & Self::MODE_FLAG.bits
+    }
+    
+    pub fn mode_value(&self, mode: &Mode) -> u8 {
+        match mode {
+            Mode::HBLANK => 0,
+            Mode::VBLANK => 1,
+            Mode::OAM => 2,
+            Mode::TRANSFER => 3,
+        }
     }
 
     fn current_mode_set(&mut self, data: u8) {
@@ -118,11 +150,11 @@ pub const COLORS_DEFAULT: [u32; 4] = [0xFFFFFFFF, 0xFFAAAAAA, 0xFF555555, 0xFF00
 
 pub struct Lcd {
     lcd_control: LcdControl,
-    lcd_status: LcdStatus,
+    pub(super) lcd_status: LcdStatus,
     scroll_y: u8,
     scroll_x: u8,
-    ly: u8, // current scanline
-    ly_compare: u8,
+    pub ly: u8, // current scanline
+    pub ly_compare: u8,
     dmg_bg_palette: u8,
     dmg_sprite_palette: [u8; 2],
     window_y: u8,
@@ -130,7 +162,6 @@ pub struct Lcd {
     bg_colors: [u32; 4],
     sp1_colors: [u32; 4],
     sp2_colors: [u32; 4],
-
 }
 
 impl Default for Lcd {
@@ -146,9 +177,9 @@ impl Default for Lcd {
             dmg_sprite_palette: [0xFF; 2],
             window_y: 0,
             window_x: 0,
-            bg_colors:[0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
-            sp1_colors: [0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
-            sp2_colors: [0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
+            bg_colors:[0xFFFFFFFF, 0xFF555555, 0xFFAAAAAA, 0xFF000000], // or this: 0xFFFFFF, 0x555555, etc?
+            sp1_colors: [0xFFFFFFFF, 0xFF555555, 0xFFAAAAAA, 0xFF000000],
+            sp2_colors: [0xFFFFFFFF, 0xFF555555, 0xFFAAAAAA, 0xFF000000],
         }
     }
 }
