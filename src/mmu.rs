@@ -30,7 +30,7 @@ pub struct MMU {
     pub serial: serial::Serial,
     pub timer: Timer,
     pub interrupts: interrupts::Interrupts,
-    ppu: PPU,
+    pub ppu: PPU,
     pub oam_dma: dma::OamDma,
 }
 
@@ -41,7 +41,7 @@ impl MMU {
             serial: serial::Serial::new(),
             timer: Timer::default(),
             interrupts: interrupts::Interrupts::default(),
-            ppu: PPU::default(),
+            ppu: PPU::new(),
             oam_dma: dma::OamDma::default(),
         }
     }

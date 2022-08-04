@@ -263,7 +263,7 @@ impl CPU {
         //190000
         if self.ticks > 0x2000{
 
-            println!("{:?} {:?} ({:#X} {:#X}) \n", self, instruction, byte, mmu.read_byte(self.pc + 1));
+            //println!("{:?} {:?} ({:#X} {:#X}) \n", self, instruction, byte, mmu.read_byte(self.pc + 1));
             /* println!(
                 "Counter:{:#X} IE:{:#X} IF:{:#X} Interrupt:{} \n", 
                 mmu.read_byte(0xFF04), mmu.read_byte(0xFFFF), mmu.read_byte(0xFF0F), 
@@ -306,6 +306,7 @@ impl CPU {
             for tick in 0..4 {
                 self.ticks += 1;
                 mmu.timer.ticks(&mut mmu.interrupts);
+                mmu.ppu.ppu_ticks(&mut mmu.interrupts)
             }
             mmu.dma_tick();
         }

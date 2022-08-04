@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 use std::fs::File;
 use std::io::Read;
+use std::time::{Instant, Duration};
+use::std::thread;
 //use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyModifiers};
 use minifb::{CursorStyle, MouseMode, Scale, Key, Window, WindowOptions};
 /* use sdl2::event::Event;
@@ -15,7 +17,7 @@ use std::time::Duration; */
 use crate::mmu::{MMU, interrupts, serial};
 use crate::cpu::CPU;
 use crate::instruction::Instruction;
-use crate::ppu::PPU;
+use crate::ppu::{PPU, lcd::state_machine};
 use crate::timer::Timer;
 use crate::dbg::DBG; 
 use crate::cart::Cartridge; 
@@ -37,7 +39,7 @@ pub const GAMEBOY_HEIGHT: usize = 144 * SCALE;
 pub const SCREEN_WIDTH: usize = 144 * SCALE;
 pub const SCREEN_HEIGHT: usize = 216 * SCALE;
 
-pub const TILE_COLORS: [u32; 4] = [0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000];
+pub const TILE_COLORS: [u32; 4] = [0xFFFFFF, 0xAAAAAA, 0x555555, 0x000000];
 
 pub struct Gameboy {
 
@@ -126,13 +128,18 @@ fn update_dbg_window(mmu: &MMU, dest: &mut [u32]) {
 
 }
 
+//pub static now:Instant = Instant::now();
+const TARGET_FRAME_TIME:u32 = 17 as u32; // 1000/60 is about 16.667
+
 
 fn main() {
     //println!("Hello, gameboy!");
     //roms/dmg_boot.bin
     //roms/mem_timing/01-read_timing.gb
-    //roms/01-special.gb Passed!
-    let mut f = File::open("roms/dmg-acid2.gb").unwrap_or_else(|error| {
+    //roms/cpu_instr/01-special.gb Passed!
+    //roms/dmg-acid2.gb
+    //roms/drmario.gb
+    let mut f = File::open("roms/drmario.gb").unwrap_or_else(|error| {
         panic!("Problem opening the file: {:?}", error);
     });
 
@@ -183,6 +190,13 @@ fn main() {
     
     //let mut c = 0;
     //'running: loop
+    let mut prev_frame: u32 = 0;
+    let mut prev_time: u128 = 0;
+    let mut start_timer: u128 = 0;
+    let mut frame_count: u64 = 0;
+
+
+    let now:Instant = Instant::now();
     while gameboy_window.is_open() && !gameboy_window.is_key_down(Key::Escape) {
 
         /* for event in event_pump.poll_iter() {
@@ -194,16 +208,38 @@ fn main() {
                 _ => {}
             }
         } */
-        let mut p = 0;
+        //let mut p = 0;
         for i in 0..dbg_buffer.len() {
             //update_dbg_window(&mem, &mut buffer);
-            com.do_cycle(&mut mem, &mut dbg); // write something more funny here!
-            if p == 5000 && dbg_window.is_open() && !dbg_window.is_key_down(Key::Escape) {
-                update_dbg_window(&mem, &mut dbg_buffer);
-                p = 0;
-            } else {
-                p += 1;
+            com.do_cycle(&mut mem, &mut dbg); 
+            //state_machine::current_time(now.elapsed().as_millis());
+            //mem.ppu.fps.write_current_time
+            if dbg_window.is_open() && !dbg_window.is_key_down(Key::Escape) {
+                /* println!("prev:{}, current:{}, status:{:#X}", 
+                    prev_frame, mem.ppu.current_frame, mem.read_byte(0xFF41)); */
+                if prev_frame != mem.ppu.current_frame {
+                    let end: u128 = now.elapsed().as_millis();
+                    let frame_time: u128 = end - prev_time;
+
+                    if (frame_time) < TARGET_FRAME_TIME as u128 {
+                        thread::sleep(Duration::from_millis((TARGET_FRAME_TIME as u128 - frame_time) as u64));
+                    }
+
+                    if end - start_timer >= 1000 {
+                        let fps = frame_count;
+                        start_timer = end;
+                        frame_count = 0;
+        
+                        println!("FPS: {}", fps);
+                    }
+                    frame_count += 1;
+
+                    prev_time = end;
+                    update_dbg_window(&mem, &mut dbg_buffer);
+                }
+                
             }
+            prev_frame = mem.ppu.current_frame;
         }
         
 
