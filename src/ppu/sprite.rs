@@ -11,13 +11,32 @@ use bitflags::bitflags;
 
 bitflags! {
     #[derive(Default)]
-    struct SpriteFlags: u8 {
-        const PRIORITY = 1 << 7;
-        const Y_FLIP = 1 << 6;
-        const X_FLIP = 1 << 5;
+    pub struct SpriteFlags: u8 {
+        const PRIORITY    = 1 << 7;
+        const Y_FLIP      = 1 << 6;
+        const X_FLIP      = 1 << 5;
         const DMG_PALETTE = 1 << 4;
-        const VRAM_BANK = 1 << 3;
+        const VRAM_BANK   = 1 << 3;
         const CGB_PALETTE = 0b111;
+    }
+}
+
+#[derive(Default, Copy, Clone)]
+pub struct SelectedSprite {
+    sprite: Sprite,
+    index: u8,
+}
+
+impl SelectedSprite {
+    pub fn new(sprite: Sprite, index: u8) -> SelectedSprite {
+        SelectedSprite {
+            sprite,
+            index,
+        }
+    }
+
+    pub fn sprite(&self) -> Sprite {
+        self.sprite
     }
 }
 
@@ -26,7 +45,7 @@ pub struct Sprite {
     y: u8,
     x: u8,
     tile: u8,
-    flags: SpriteFlags,
+    pub(super) flags: SpriteFlags,
 }
 
 impl Sprite {
@@ -77,5 +96,24 @@ impl Sprite {
     }
     pub fn set_flags(&mut self, data:u8) {
         self.flags = SpriteFlags::from_bits_truncate(data);
+    }
+
+    pub fn priority(&self) -> bool {
+        self.flags.intersects(SpriteFlags::PRIORITY)
+    }
+    pub fn y_flip(&self) -> bool {
+        self.flags.intersects(SpriteFlags::Y_FLIP)
+    }
+    pub fn x_flip(&self) -> bool {
+        self.flags.intersects(SpriteFlags::X_FLIP)
+    }
+    pub fn dmg_palette(&self) -> bool {
+        self.flags.intersects(SpriteFlags::DMG_PALETTE)
+    }
+    pub fn vram_bank(&self) -> bool {
+        self.flags.intersects(SpriteFlags::VRAM_BANK)
+    }
+    pub fn cgb_palette(&self) -> bool {
+        self.flags.intersects(SpriteFlags::CGB_PALETTE)
     }
 }
