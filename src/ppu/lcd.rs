@@ -9,29 +9,8 @@ pub enum Mode {
     TRANSFER,
 }
 
-/* bitflags! {
-    struct ModeFlags: u8 {
-        const HBLANK   = 1 << 0;
-        const VBLANK   = 1 << 1;
-        const OAM      = 1 << 2;
-        const TRANSFER = 1 << 3;
-    }
-}
-
-impl From<Mode> for ModeFlags {
-    fn from(mode: Mode) -> Self {
-        match mode {
-            Mode::HBLANK => Self::HBLANK,
-            Mode::VBLANK => Self::VBLANK,
-            Mode::OAM => Self::OAM,
-            Mode::TRANSFER => Self::TRANSFER,
-        }
-    }
-} */
-
-
 bitflags! {
-    struct LcdControl: u8 {
+    pub(super) struct LcdControl: u8 {
         const DISPLAY_ENABLE      = 1 << 7;
         const WINDOW_TILEMAP      = 1 << 6;
         const WINDOW_ENABLE       = 1 << 5;
@@ -44,11 +23,11 @@ bitflags! {
 }
 
 impl LcdControl {
-    fn display_enable(&self) -> bool {
+    pub fn display_enable(&self) -> bool {
         self.intersects(Self::DISPLAY_ENABLE)
     }
 
-    fn window_tilemap(&self) -> u16 {
+    pub fn window_tilemap(&self) -> u16 {
         if self.intersects(Self::WINDOW_TILEMAP) {
             0x9C00
         } else {
@@ -56,19 +35,19 @@ impl LcdControl {
         }
     }
 
-    fn window_enable(&self) -> bool {
+    pub fn window_enable(&self) -> bool {
         self.intersects(Self::WINDOW_ENABLE)
     }
 
-    fn bg_window_tile_data(&self) -> u16 {
+    pub fn bg_window_tile_data(&self) -> u16 {
         if self.intersects(Self::BG_WINDOW_TILE_DATA) {
-            0x8800
-        } else {
             0x8000
+        } else {
+            0x8800
         }
     }
 
-    fn bg_tilemap(&self) -> u16 {
+    pub fn bg_tilemap(&self) -> u16 {
         if self.intersects(Self::BG_TILEMAP) {
             0x9C00
         } else {
@@ -76,7 +55,7 @@ impl LcdControl {
         }
     }
 
-    fn sprite_size(&self) -> u8 {
+    pub fn sprite_size(&self) -> u8 {
         if self.intersects(Self::OBJ_SIZE) {
             16
         } else {
@@ -84,11 +63,11 @@ impl LcdControl {
         }
     }
 
-    fn sprite_enable(&self) -> bool {
+    pub fn sprite_enable(&self) -> bool {
         self.intersects(Self::OBJ_ENABLE)
     }
 
-    fn bg_window_priority(&self) -> bool {
+    pub fn bg_window_priority(&self) -> bool {
         self.intersects(Self::BG_WINDOW_PRIORITY)
     }
 }
@@ -146,22 +125,22 @@ impl LcdStatus {
     }
 }
 
-pub const COLORS_DEFAULT: [u32; 4] = [0xFFFFFFFF, 0xFFAAAAAA, 0xFF555555, 0xFF000000]; 
+pub const COLORS_DEFAULT: [u32; 4] = [0xFFFFFF, 0xAAAAAA, 0x555555, 0x000000]; 
 
 pub struct Lcd {
-    lcd_control: LcdControl,
+    pub(super) lcd_control: LcdControl,
     pub(super) lcd_status: LcdStatus,
-    scroll_y: u8,
-    scroll_x: u8,
+    pub(super) scroll_y: u8,
+    pub(super) scroll_x: u8,
     pub ly: u8, // current scanline
     pub ly_compare: u8,
     dmg_bg_palette: u8,
     dmg_sprite_palette: [u8; 2],
-    window_y: u8,
-    window_x: u8,
-    bg_colors: [u32; 4],
-    sp1_colors: [u32; 4],
-    sp2_colors: [u32; 4],
+    pub(super) window_y: u8,
+    pub(super) window_x: u8,
+    pub(super) bg_colors: [u32; 4],
+    pub(super) sp1_colors: [u32; 4],
+    pub(super) sp2_colors: [u32; 4],
 }
 
 impl Default for Lcd {
@@ -177,9 +156,9 @@ impl Default for Lcd {
             dmg_sprite_palette: [0xFF; 2],
             window_y: 0,
             window_x: 0,
-            bg_colors:[0xFFFFFFFF, 0xFF555555, 0xFFAAAAAA, 0xFF000000], // or this: 0xFFFFFF, 0x555555, etc?
-            sp1_colors: [0xFFFFFFFF, 0xFF555555, 0xFFAAAAAA, 0xFF000000],
-            sp2_colors: [0xFFFFFFFF, 0xFF555555, 0xFFAAAAAA, 0xFF000000],
+            bg_colors:[0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000], // or this: 0xFFFFFF, 0x555555, etc?
+            sp1_colors: [0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
+            sp2_colors: [0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
         }
     }
 }
@@ -210,24 +189,21 @@ impl Lcd {
             0xFF43 => self.scroll_x = value,
             0xFF44 => self.ly = value,
             0xFF45 => self.ly_compare = value,
-            0xFF47 => {self.dmg_bg_palette = value; self.update_palette(value, false);},
-            0xFF48 => {self.dmg_sprite_palette[0] = value; self.update_palette(value & 0b11111100, true);},
-            0xFF49 => {self.dmg_sprite_palette[1] = value; self.update_palette(value & 0b11111100, true);},
+            0xFF47 => {self.dmg_bg_palette = value; self.update_palette(value, 0);},
+            0xFF48 => {self.dmg_sprite_palette[0] = value; self.update_palette(value & 0b11111100, 1);},
+            0xFF49 => {self.dmg_sprite_palette[1] = value; self.update_palette(value & 0b11111100, 2);},
             0xFF4A => self.window_y = value,
             0xFF4B => self.window_x = value,
             _ => unreachable!("Unsupported address {:#X}. How did this happen lol!", address),
         }
     }
 
-    pub fn update_palette(&mut self, palette_data: u8, pal_1: bool) {
-        if pal_1 {
-            for i in 0..4 {
-                self.sp1_colors[i] = COLORS_DEFAULT[((palette_data >> 2 * i) & 0b11) as usize];
-            }
-        } else {
-            for i in 0..4 {
-                self.sp2_colors[i] = COLORS_DEFAULT[((palette_data >> 2 * i) & 0b11) as usize];
-            }
+    pub fn update_palette(&mut self, palette_data: u8, pal_num: u8) {
+        match pal_num {
+            0 => for i in 0..4 {self.bg_colors[i] = COLORS_DEFAULT[((palette_data >> 2 * i) & 0b11) as usize];},
+            1 => for i in 0..4 {self.sp1_colors[i] = COLORS_DEFAULT[((palette_data >> 2 * i) & 0b11) as usize];},
+            2 => for i in 0..4 {self.sp2_colors[i] = COLORS_DEFAULT[((palette_data >> 2 * i) & 0b11) as usize];},
+            _ => unreachable!("update_palette! unknown palette {}", pal_num),
         }
     }
 }

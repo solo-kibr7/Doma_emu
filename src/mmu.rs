@@ -15,6 +15,8 @@
 
 pub use crate::timer::Timer;
 pub use crate::ppu::PPU;
+pub use crate::cartridge::Cartridge;
+pub use crate::joypad::JoyPad;
 
 pub mod interrupts;
 pub mod serial;
@@ -31,6 +33,8 @@ pub struct MMU {
     pub timer: Timer,
     pub interrupts: interrupts::Interrupts,
     pub ppu: PPU,
+    pub cartridge: Cartridge,
+    pub joypad: JoyPad,
     pub oam_dma: dma::OamDma,
 }
 
@@ -42,12 +46,16 @@ impl MMU {
             timer: Timer::default(),
             interrupts: interrupts::Interrupts::default(),
             ppu: PPU::new(),
+            cartridge: Cartridge::default(),
+            joypad: JoyPad::default(),
             oam_dma: dma::OamDma::default(),
         }
     }
 
     pub fn read_byte(&self, address: u16) -> u8 {
-        if 0x8000 <= address && address <= 0x9FFF {
+        if address <= 0x8000 {
+            self.cartridge.read_cart(address)
+        } else if 0x8000 <= address && address <= 0x9FFF {
             self.ppu.read_vram(address)
         } else if 0xFE00 <= address && address <= 0xFE9F {
             if self.oam_dma.in_transfer {0xFF} else {
@@ -66,7 +74,9 @@ impl MMU {
         if 0x8000 <= address && address <= 0x9FFF {
             self.ppu.write_vram(address, value);
         } else if 0xFE00 <= address && address <= 0xFE9F {
+            //println!("{}", self.oam_dma.in_transfer);
             if !self.oam_dma.in_transfer {
+                //println!("write_oam");
                 self.ppu.write_oam(address, value);
             }
         } else if 0xFF00 <= address && address <= 0xFF7F {
@@ -81,6 +91,7 @@ impl MMU {
 
     pub fn read_io(&self, address: u16) -> u8 {
         match address {
+            0xFF00 => self.joypad.read_joypad(),
             0xFF01 => self.serial.get_data(),
             0xFF02 => self.serial.get_control(),
             0xFF04..=0xFF07 => self.timer.timer_read(address),
@@ -93,6 +104,7 @@ impl MMU {
     }
     pub fn write_io(&mut self, address: u16, value: u8) {
         match address {
+            0xFF00 => self.joypad.write_joypad(value),
             0xFF01 => self.serial.write_data(value),
             0xFF02 => self.serial.write_control(value),
             0xFF04 => self.timer.write_div(),
@@ -107,14 +119,14 @@ impl MMU {
         };
     }
 
-    pub fn from_rom_file(&mut self, rom_file: &[u8]) {
+    /* pub fn from_rom_file(&mut self, rom_file: &[u8]) {
         let mut i: u16 = 0x0000;
 
         for &byte in rom_file.iter() {
             self.write_byte(i, byte);
             i += 1;
         }
-    }
+    } */
 
     pub fn mmu_section(&self, address: u16) -> &str {
         if address < 0x4000 {
@@ -152,15 +164,18 @@ impl MMU {
 impl DmaTransfer for MMU {
     fn dma_tick(&mut self) {
         //println!("in_transfer:{}", self.oam_dma.in_transfer);
+        
         if self.oam_dma.in_transfer {
+            //println!("dma_write");
             if self.oam_dma.start_delay > 0 {
                 self.oam_dma.start_delay -= 1;
             } else {
                 // don't need the 0xFE00 but why not
                 self.ppu.write_oam(0xFE00 | self.oam_dma.address_byte as u16, 
-                    self.read_byte(self.oam_dma.value as u16 * 0x100 + self.oam_dma.address_byte as u16));
+                    self.read_byte((self.oam_dma.value as u16 * 0x100) + self.oam_dma.address_byte as u16));
                 self.oam_dma.address_byte += 1;
                 self.oam_dma.in_transfer = self.oam_dma.address_byte < 0xA0;
+                //println!("transfer:{}", self.oam_dma.in_transfer);
             }
         }
     }

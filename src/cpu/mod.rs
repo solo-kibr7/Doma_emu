@@ -257,8 +257,6 @@ impl CPU {
     pub fn run_instruction(&mut self, mmu: &mut MMU) -> u8 {
         let byte = mmu.read_byte(self.pc);
 
-        
-
         let instruction = self.decode(byte, mmu);
         //190000
         if self.ticks > 0x2000{
@@ -270,13 +268,12 @@ impl CPU {
                 mmu.interrupts.peek_highest_interrupt().is_some()); */
         }
 
-        /*println!("Current byte {:#x} | pc: {:#X}", byte as u8, self.pc);
-
-        println!("Current instruction {:?} \n ", instruction);
-
-        println!("Current instruction {:?} \n ", self);*/
-
-        self.excute(&instruction, mmu)
+        let cycle = self.excute(&instruction, mmu);
+        if self.ticks < (4*100) {
+            //println!("byte:{:#X}, ticks:{}:{}, cycle:{}", byte, self.ticks, self.ticks/4, cycle);
+        }
+        
+        cycle
     }
 
     pub fn do_cycle(&mut self, mmu: &mut MMU, dbg: &mut DBG) {
@@ -289,6 +286,7 @@ impl CPU {
             dbg.dbg_update(mmu);
             dbg.dbg_print();
             let m = self.run_instruction(mmu);
+            //println!("c:{}", m);
             self.cycle(mmu, m);
         }
         if self.ime && mmu.interrupts.peek_highest_interrupt().is_some() {

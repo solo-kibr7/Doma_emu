@@ -10,6 +10,7 @@ pub struct OamDma {
 
 impl OamDma {
     pub fn dma_start(&mut self, start: u8) {
+        //println!("start");
         self.address_byte = 0;
         self.start_delay = 2;
         self.in_transfer = true;
