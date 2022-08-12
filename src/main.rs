@@ -149,7 +149,7 @@ fn update_gameboy_window(mmu: &MMU, dest: &mut [u32]) {
     }
 }
 
-fn press_keys(mmu: &mut MMU, k: Key, pressed: bool) {
+fn press_keys(mmu: &mut MMU, k: Key, pressed: bool, released: bool) {
     if pressed {
         match k {
             Key::W => mmu.joypad.press_joypad(JoypadButtons::Up),
@@ -162,7 +162,8 @@ fn press_keys(mmu: &mut MMU, k: Key, pressed: bool) {
             Key::RightShift => mmu.joypad.press_joypad(JoypadButtons::Select),
             _ => (),
         }
-    } else {
+    } 
+    if released {
         match k {
             Key::W => mmu.joypad.release_joypad(JoypadButtons::Up),
             Key::A => mmu.joypad.release_joypad(JoypadButtons::Left),
@@ -189,15 +190,24 @@ fn main() {
     //roms/dmg-acid2.gb
     //roms/drmario.gb
     //roms/instr_timing.gb
+    //roms/ppu-acceptance/hblank_ly_scx_timing-GS.gb
+    //roms/ppu-acceptance/intr_2_0_timing.gb
     let mut f = File::open("roms/drmario.gb").unwrap_or_else(|error| {
         panic!("Problem opening the file: {:?}", error);
     });
 
-    let mut rom_file = Vec::<u8>::new();
-    f.read_to_end(&mut rom_file);
+    let mut bootfile = File::open("roms/dmg_boot.bin").unwrap_or_else(|error| {
+        panic!("Problem opening the file: {:?}", error);
+    });
 
-    let mut mem = MMU::new();
+    let mut rom_file = Vec::<u8>::new();
+    let mut boot_file = Vec::<u8>::new();
+    f.read_to_end(&mut rom_file);
+    bootfile.read_to_end(&mut boot_file);
+
+    let mut mem = MMU::default();
     let mut com = CPU::default();
+
     let mut dbg = DBG::default();
 
     let mut gameboy_window = Window::new(
@@ -235,8 +245,9 @@ fn main() {
 
     // put rom into memory
     mem.cartridge.from_rom_file(&rom_file);
+    //mem.cartridge.from_boot_file(&boot_file);
 
-    println!("first byte at 0000 is {:#X}", mem.read_byte(0x0000) as u16);
+    //println!("first byte at 0000 is {:#X}", mem.read_byte(0x0000) as u16);
     //let rom_types: [String] = ["str", "nini"];
 
     
@@ -266,6 +277,16 @@ fn main() {
         } */
         //let mut p = 0;
         //dbg_buffer.len() 
+        let key_array = [Key::W, Key::A, Key::S, Key::D, Key::Comma, Key::Period, Key::Enter, Key::RightShift];
+        for k in key_array {
+            press_keys(&mut mem, k, gameboy_window.is_key_pressed(k, KeyRepeat::Yes), gameboy_window.is_key_released(k));
+            /* if gameboy_window.is_key_pressed(k, KeyRepeat::Yes) {
+                println!("key:{:?}", k);
+            }
+            if gameboy_window.is_key_released(k) {
+                println!("key2:{:?}", k);
+            } */
+        }
         for i in 0..gameboy_buffer.len() {
             //update_dbg_window(&mem, &mut buffer);
             /* gameboy_window.get_keys_pressed(KeyRepeat::No).map(|keys| {
@@ -277,11 +298,6 @@ fn main() {
                     }
                 }
             }); */
-            let key_array = [Key::W, Key::A, Key::S, Key::D, Key::Comma, Key::Period, Key::Enter, Key::RightShift];
-            for k in key_array {
-                press_keys(&mut mem, k, gameboy_window.is_key_down(k));
-                
-            }
             
             com.do_cycle(&mut mem, &mut dbg); 
             //state_machine::current_time(now.elapsed().as_millis());
