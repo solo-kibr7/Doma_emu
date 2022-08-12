@@ -49,6 +49,16 @@ impl Default for Timer {
 }
 
 impl Timer {
+    pub fn new() -> Timer {
+        Timer { 
+            divider: 0,
+            counter: 0,
+            modulo: 0,
+            control: TimerControl::from_bits_truncate(0),
+            interrupt_next: false,
+            during_interrupt: false,
+        }
+    }
     pub fn timer_read(&self, address: u16) -> u8 {
         match address {
             0xFF04 => (self.divider >> 8) as u8,

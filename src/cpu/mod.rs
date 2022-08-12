@@ -259,7 +259,9 @@ impl CPU {
 
         let instruction = self.decode(byte, mmu);
         //190000
-        if self.ticks > 0x2000{
+        //0xFE00 < self.get_hl() && self.get_hl() <= 0xFE9F
+        //
+        if self.ticks >= 0x6B3F0 && self.ticks < 0x6C3F0 {
 
             //println!("{:?} {:?} ({:#X} {:#X}) \n", self, instruction, byte, mmu.read_byte(self.pc + 1));
             /* println!(

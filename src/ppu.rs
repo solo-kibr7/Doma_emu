@@ -28,7 +28,6 @@ pub struct PPU {
     fetched_sprite_count: u8,
     pub current_frame: u32,
     window_line: u8,
-    scanline: u8,
     line_ticks: u32,
     pub(super) pixel_fifo: PixelFifo,
     pub(super) lcd: lcd::Lcd,
@@ -37,7 +36,7 @@ pub struct PPU {
 
 impl Default for PPU {
     fn default() -> Self {
-        Self {
+        let mut ppu = Self {
             vram: [0; 0x2000],
             oam: [Sprite::default(); 40],
             selected_oam: ArrayVec::<_, 10>::new(),
@@ -46,13 +45,16 @@ impl Default for PPU {
             fetched_sprite_count: 0,
             current_frame: 0,
             window_line: 0,
-            scanline: 153,
             line_ticks: 400,
             pixel_fifo: PixelFifo::default(),
             lcd: lcd::Lcd::default(),
             video_buffer: vec![0; XRES * YRES],
             //add more
-        }
+        };
+        ppu.lcd.lcd_write(0xFF47, 0xFC);
+        ppu.lcd.lcd_write(0xFF48, 0xFF);
+        ppu.lcd.lcd_write(0xFF49, 0xFF);
+        ppu
     }
 }
 
@@ -67,10 +69,9 @@ impl PPU {
             fetched_sprite_count: 0,
             current_frame: 0,
             window_line: 0,
-            scanline: 0,
             line_ticks: 0,
             pixel_fifo: PixelFifo::default(),
-            lcd: lcd::Lcd::default(),
+            lcd: lcd::Lcd::new(),
             video_buffer: vec![0; XRES * YRES],
         }
     }
@@ -89,7 +90,7 @@ impl PPU {
     }
     pub fn write_oam(&mut self, address: u16, data:u8) {
         let index = (address & 0xFF) as usize;
-        //println!("write, index:{}, i2:{}, i3:{}, data:{}", index, index/4, index%4, data);
+        println!("write, index:{:#X}, i2:{}, i3:{}, data:{}", index, index/4, index%4, data);
         self.oam[index / 4].set_at_offset((index % 4) as u8, data);
     }
 

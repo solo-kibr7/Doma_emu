@@ -66,27 +66,28 @@ impl JoyPad {
 
     pub fn read_joypad(&self) -> u8 {
         let mut output = 0xCF;
-        if !self.button_select {
+        if self.button_select {
             output &= !self.buttons.bits() >> 4;
         }
-        if !self.direction_select() {
+        if self.direction_select {
             output &= !self.buttons.bits();
         }
         // || (((!self.button_select) as u8) << 5) || ((!self.direction_select as u8) << 4)
         // only the bottom 4 bits are read
-        output
+        output | (((!self.button_select) as u8) << 5) | ((!self.direction_select as u8) << 4)
     }
 
     pub fn write_joypad(&mut self, value: u8) {
         self.button_select = ((value >> 5) & 1) == 0;
         self.direction_select = ((value >> 4) & 1) == 0;
+        //println!("button:{}, direction:{}", self.button_select, self.direction_select);
     }
 
     pub fn press_joypad(&mut self, button: JoypadButtons) {
-        self.buttons.remove(button.into())
+        self.buttons.insert(button.into())
     }
 
     pub fn release_joypad(&mut self, button: JoypadButtons) {
-        self.buttons.insert(button.into())
+        self.buttons.remove(button.into())
     }
 }

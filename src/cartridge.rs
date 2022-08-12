@@ -3,7 +3,7 @@
 pub struct Header {
     entry: [u8; 4],
     logo: [u8; 0x30],
-    tile: [u8; 16],
+    title: [u8; 16],
     new_lic_code: u16,
     sgb_flag: u8,
     cartridge_type: u8,
@@ -20,7 +20,7 @@ impl Default for Header {
         Self {
             entry: [0; 4],
             logo: [0; 0x30],
-            tile: [0; 16],
+            title: [0; 16],
             new_lic_code: 0,
             sgb_flag: 0,
             cartridge_type: 0,
@@ -52,6 +52,33 @@ impl Cartridge {
         for &byte in rom_file.iter() {
             self.rom.push(byte);
         }
+        let mut header_values: [u8; 0x50] = [0; 0x50];
+        header_values.clone_from_slice(&self.rom[0x100..0x150]);
+        self.load_header(&header_values);
+
+        let title = self.get_title();
+        let rom_type = self.get_type();
+        let rom_size = self.rom_size();
+
+        let mut x: u8 = 0;
+        for &value in self.rom[0x0134..=0x014C].iter() {
+            x = x.wrapping_sub(value).wrapping_sub(1);
+        }
+
+        let checksum_state = self.header.checksum == x as u8;
+
+        println!("title:{} \ntype:{} \nrom_size:{}kb, ram_size:{} \nlic:{} \nversion:{}, checksum:{}", 
+            title, rom_type, rom_size, self.header.ram_size, self.lic_name(), self.header.rom_version, checksum_state);
+    }
+
+    pub fn from_boot_file(&mut self, boot_file: &[u8]) {
+        for (i, &byte) in boot_file.iter().enumerate() {
+            if i == 0x100 {
+                println!("bad");
+                break;
+            }
+            self.rom[i] = byte;
+        }
     }
 
     pub fn read_cart(&self, address: u16) -> u8 {
@@ -63,12 +90,12 @@ impl Cartridge {
             if i < 4 {
                 self.header.entry[i] = *value;
             } else if i < 0x34 {
-                self.header.logo[i] = *value;
+                self.header.logo[i - 4] = *value;
             } else if i < 0x44 {
-                self.header.tile[i] = *value;
+                self.header.title[i - 0x34] = *value;
             } else if i < 0x46 {
                 if i == 0x44 {
-                    self.header.new_lic_code = (*value << 4) as u16;
+                    self.header.new_lic_code = (*value as u16) << 8;
                 } else {
                     self.header.new_lic_code += *value as u16;
                 }
@@ -90,7 +117,7 @@ impl Cartridge {
                 self.header.checksum = *value;
             } else if i < 0x50 {
                 if i == 0x4E {
-                    self.header.global_checksum = (*value << 4) as u16;
+                    self.header.global_checksum = (*value as u16) << 8;
                 } else {
                     self.header.global_checksum += *value as u16;
                 }
@@ -98,12 +125,53 @@ impl Cartridge {
         }
     }
 
-    pub fn lic_name(&self, lic_code: u8) -> &str {
-        if lic_code <= 0xA4 {
-            self.get_lic(lic_code)
-        } else {
-            "UNKNOWN"
+    pub fn get_title(&self) -> String {
+        let mut word = String::new();
+        for num in self.header.title {
+            let mut letter = '@';
+            match char::from_u32(num as u32) {
+                Some(x) => letter = x,
+                None => println!("oops"),
+            };
+            
+            word.push(letter);
         }
+        word
+    }
+
+    pub fn lic_name(&self) -> &str {
+        if self.header.old_lic_code == 0x33 {
+            let num1 = self.header.new_lic_code >> 8;
+            let num2 = self.header.new_lic_code as u8;
+
+            let letter1;
+            let letter2;
+            match char::from_u32(num1 as u32) {
+                Some(x) => letter1 = x,
+                None => return "UNKNOWN",
+            };
+            match char::from_u32(num2 as u32) {
+                Some(x) => letter2 = x,
+                None => return "UNKNOWN",
+            };
+
+            if !letter1.to_digit(16).is_some() || !letter2.to_digit(16).is_some(){
+                return "UNKNOWN";
+            }
+
+            let code1 = letter1.to_digit(16).unwrap();
+            let code2 = letter2.to_digit(16).unwrap();
+
+            self.get_lic((code1 << 4) as u8 + code2 as u8)
+
+        } else {
+            self.get_lic(self.header.old_lic_code)
+        }
+        
+    }
+
+    pub fn rom_size(&self) -> usize {
+        32 * (1 << self.header.rom_size)
     }
 
     pub fn get_lic(&self, lic_code: u8) -> &str {
@@ -169,6 +237,40 @@ impl Cartridge {
             0x97 => "Kaneko",
             0x99 => "Pack in soft",
             0xA4 => "Konami (Yu-Gi-Oh!)",
+            _    => "UNKNOWN",
+        }
+    }
+
+    pub fn get_type(&self) -> &str {
+        match self.header.cartridge_type {
+            0x00 => "ROM ONLY",
+            0x01 => "MBC1",
+            0x02 => "MBC1+RAM",
+            0x03 => "MBC1+RAM+BATTERY",
+            0x05 => "MBC2",
+            0x06 => "MBC2+BATTERY",
+            0x08 => "ROM+RAM",
+            0x09 => "ROM+RAM+BATTERY",
+            0x0B => "MMM01",
+            0x0C => "MMM01+RAM",
+            0x0D => "MMM01+RAM+BATTERY",
+            0x0F => "MBC3+TIMER+BATTERY",
+            0x10 => "MBC3+TIMER+RAM+BATTERY",
+            0x11 => "MBC3",
+            0x12 => "MBC3+RAM",
+            0x13 => "MBC3+RAM+BATTERY",
+            0x19 => "MBC5",
+            0x1A => "MBC5+RAM",
+            0x1B => "MBC5+RAM+BATTERY",
+            0x1C => "MBC5+RUMBLE",
+            0x1D => "MBC5+RUMBLE+RAM",
+            0x1E => "MBC5+RUMBLE+RAM+BATTERY",
+            0x20 => "MBC6",
+            0x22 => "MBC7+SENSOR+RUMBLE+RAM+BATTERY",
+            0xFC => "POCKET CAMERA",
+            0xFD => "BANDAI TAMA5",
+            0xFE => "HuC3",
+            0xFF => "HuC1+RAM+BATTERY",
             _    => "UNKNOWN",
         }
     }

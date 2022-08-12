@@ -38,9 +38,9 @@ pub struct MMU {
     pub oam_dma: dma::OamDma,
 }
 
-impl MMU {
-    pub fn new() -> MMU {
-        MMU { 
+impl Default for MMU {
+    fn default() -> Self {
+        Self {
             ram: [0; 65536],
             serial: serial::Serial::new(),
             timer: Timer::default(),
@@ -51,9 +51,24 @@ impl MMU {
             oam_dma: dma::OamDma::default(),
         }
     }
+}
+
+impl MMU {
+    pub fn new() -> MMU {
+        MMU { 
+            ram: [0; 65536],
+            serial: serial::Serial::new(),
+            timer: Timer::new(),
+            interrupts: interrupts::Interrupts::default(),
+            ppu: PPU::new(),
+            cartridge: Cartridge::default(),
+            joypad: JoyPad::default(),
+            oam_dma: dma::OamDma::default(),
+        }
+    }
 
     pub fn read_byte(&self, address: u16) -> u8 {
-        if address <= 0x8000 {
+        if address < 0x8000 {
             self.cartridge.read_cart(address)
         } else if 0x8000 <= address && address <= 0x9FFF {
             self.ppu.read_vram(address)
@@ -166,13 +181,15 @@ impl DmaTransfer for MMU {
         //println!("in_transfer:{}", self.oam_dma.in_transfer);
         
         if self.oam_dma.in_transfer {
-            //println!("dma_write");
+            println!("dma_write");
             if self.oam_dma.start_delay > 0 {
                 self.oam_dma.start_delay -= 1;
             } else {
                 // don't need the 0xFE00 but why not
-                self.ppu.write_oam(0xFE00 | self.oam_dma.address_byte as u16, 
-                    self.read_byte((self.oam_dma.value as u16 * 0x100) + self.oam_dma.address_byte as u16));
+                let new_address = 0xFE00 | self.oam_dma.address_byte as u16;
+                let read_address = (self.oam_dma.value as u16 * 0x100) + self.oam_dma.address_byte as u16;
+                println!("write_oam:{:#X}, read_byte:{:#X}:{:#X}", new_address, read_address, self.read_byte(read_address));
+                self.ppu.write_oam(new_address, self.read_byte(read_address));
                 self.oam_dma.address_byte += 1;
                 self.oam_dma.in_transfer = self.oam_dma.address_byte < 0xA0;
                 //println!("transfer:{}", self.oam_dma.in_transfer);

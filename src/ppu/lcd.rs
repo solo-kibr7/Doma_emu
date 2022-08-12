@@ -146,6 +146,26 @@ pub struct Lcd {
 impl Default for Lcd {
     fn default() -> Self {
         Self {
+            lcd_control: LcdControl::from_bits_truncate(0),
+            lcd_status: LcdStatus::from_bits_truncate(4),
+            scroll_y: 0,
+            scroll_x: 0,
+            ly: 0, // current scanline
+            ly_compare: 0,
+            dmg_bg_palette: 0xFC,
+            dmg_sprite_palette: [0xFF; 2],
+            window_y: 0,
+            window_x: 0,
+            bg_colors:[0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
+            sp1_colors: [0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
+            sp2_colors: [0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
+        }
+    }
+}
+
+impl Lcd {
+    pub fn new() -> Lcd {
+        Lcd { 
             lcd_control: LcdControl::from_bits_truncate(0x91),
             lcd_status: LcdStatus::from_bits_truncate(4),
             scroll_y: 0,
@@ -156,14 +176,11 @@ impl Default for Lcd {
             dmg_sprite_palette: [0xFF; 2],
             window_y: 0,
             window_x: 0,
-            bg_colors:[0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000], // or this: 0xFFFFFF, 0x555555, etc?
+            bg_colors:[0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
             sp1_colors: [0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
             sp2_colors: [0xFFFFFF, 0x555555, 0xAAAAAA, 0x000000],
         }
     }
-}
-
-impl Lcd {
     pub fn lcd_read(&self, address: u16) -> u8 {
         match address {
             0xFF40 => self.lcd_control.bits(),
