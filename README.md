@@ -7,6 +7,7 @@ Requires mastery over the Rust language. Also requires understand of low-level s
 ROMS ARE NOT PROVIDED!!!
 
 Implemented:
+
 CPU: Passed all instruction tests
 
 PPU
