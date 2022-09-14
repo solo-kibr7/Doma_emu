@@ -8,7 +8,11 @@ ROMS ARE NOT PROVIDED!!!
 
 Implemented:
 CPU: Passed all instruction tests
+
 PPU
+
 Joypad
+
 Timer
+
 MMU
